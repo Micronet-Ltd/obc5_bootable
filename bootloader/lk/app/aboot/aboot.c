@@ -204,6 +204,9 @@ char display_panel_buf[MAX_PANEL_BUF_SIZE];
 char panel_display_mode[MAX_RSP_SIZE];
 
 extern int emmc_recovery_init(void);
+// by skj
+extern int check_auto_auto_fac(void);
+
 
 #if NO_KEYPAD_DRIVER
 extern int fastboot_trigger(void);
@@ -274,10 +277,12 @@ unsigned char *update_cmdline(const char * cmdline)
 	} else if (boot_reason_alarm) {
 		cmdline_len += strlen(alarmboot_cmdline);
 	// by skj
+#ifndef BOOT_FEATURE_A3002	
 	} else if (0==boot_into_recovery &&
 			target_pause_for_battery_charge()) {
 		pause_at_bootup = 1;
 		cmdline_len += strlen(battchg_pause);
+#endif			
 	}
     /* Added by yanwenlong for into ftm modem. (general) 2013.7.31 begin */ 
     else if (boot_into_ftm)
@@ -2975,7 +2980,8 @@ void aboot_init(const struct app_descriptor *app)
             boot_into_recovery = 1;
             //sdcard_upgrade = 1;
         }
-        if (!boot_into_recovery &&
+		
+        if (check_auto_auto_fac() || !boot_into_recovery &&
             (keys_get_state(KEY_BACK) || keys_get_state(KEY_VOLUMEDOWN) 
             && (0 == target_pause_for_battery_charge())))
         {

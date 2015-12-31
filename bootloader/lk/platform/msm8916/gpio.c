@@ -132,3 +132,30 @@ void gpio_config_blsp_i2c(uint8_t blsp_id, uint8_t qup_id)
 		ASSERT(0);
 	}
 }
+
+// by skj
+#define TEST_IN_OUT_PIN (37)
+int check_auto_auto_fac(void)
+{
+	volatile int i;
+	int value;
+	
+	gpio_tlmm_config(TEST_IN_OUT_PIN, 0, GPIO_INPUT, GPIO_PULL_UP,
+		GPIO_2MA, GPIO_ENABLE);
+
+	gpio_set_dir(TEST_IN_OUT_PIN,0);
+		
+	for(i=0;i<1000;i++);
+	value=gpio_status(TEST_IN_OUT_PIN);	
+		
+	gpio_tlmm_config(TEST_IN_OUT_PIN, 0, GPIO_INPUT, GPIO_PULL_DOWN,
+		GPIO_2MA, GPIO_ENABLE);
+	
+	dprintf(CRITICAL, "check_auto_auto_fac ret value = %d\n",value);
+	
+	if(0==value)
+		return 1;
+	return 0;
+}
+
+

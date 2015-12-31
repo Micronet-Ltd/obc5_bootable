@@ -57,7 +57,7 @@ static struct panel_config booyi_otm1901a_1080p_5p5_video_panel_data = {
 /* Panel resolution                                                          */
 /*---------------------------------------------------------------------------*/
 static struct panel_resolution booyi_otm1901a_1080p_5p5_video_panel_res = {
-	1080, 1920, 36, 28, 4, 0, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	1080, 1920, 36, 28, 4, 0, 13, 12, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
 /*---------------------------------------------------------------------------*/
@@ -192,6 +192,13 @@ static char booyi_otm1901a_1080p_5p5_video_on_cmd117[]={0x02,0x00,0x29,0xC0,0x53
 static char booyi_otm1901a_1080p_5p5_video_on_cmd118[]={0x02,0x00,0x29,0xC0,0x00,0x00,0xff,0xff}; 
 static char booyi_otm1901a_1080p_5p5_video_on_cmd119[]={0x02,0x00,0x29,0xC0,0x55,0x01,0xff,0xff};  
 
+
+static char  booyi_otm1901a_1080p_5p5_video_on_cmdAdd100[]={0x02,0x00,0x39,0xC0,0x00,0xB0,0xFF,0xFF};
+static char  booyi_otm1901a_1080p_5p5_video_on_cmdAdd101[]={0x02,0x00,0x39,0xC0,0xCA,0x01,0xFF,0xFF};
+static char  booyi_otm1901a_1080p_5p5_video_on_cmdAdd102[]={0x02,0x00,0x39,0xC0,0x00,0xB3,0xFF,0xFF};
+static char  booyi_otm1901a_1080p_5p5_video_on_cmdAdd103[]={0x02,0x00,0x39,0xC0,0xCA,0x40,0xFF,0xFF};
+
+
 static struct mipi_dsi_cmd booyi_otm1901a_1080p_5p5_video_on_command[] = {
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd000),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd000, 0x00},
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd001),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd001, 0x00},
@@ -293,6 +300,12 @@ static struct mipi_dsi_cmd booyi_otm1901a_1080p_5p5_video_on_command[] = {
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd097),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd097, 0x00},
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd098),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd098, 0x00},
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd099),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd099, 0x00},
+	
+	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmdAdd100),(char *)booyi_otm1901a_1080p_5p5_video_on_cmdAdd100, 0x00},
+	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmdAdd101),(char *)booyi_otm1901a_1080p_5p5_video_on_cmdAdd101, 0x00},
+	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmdAdd102),(char *)booyi_otm1901a_1080p_5p5_video_on_cmdAdd102, 0x00},
+	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmdAdd103),(char *)booyi_otm1901a_1080p_5p5_video_on_cmdAdd103, 0x00},
+	
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd100),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd100, 0x00},
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd101),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd101, 0x00},
 	{sizeof(booyi_otm1901a_1080p_5p5_video_on_cmd102),(char *)booyi_otm1901a_1080p_5p5_video_on_cmd102, 0x00},
