@@ -844,6 +844,21 @@ static uint32_t mipi_ili6136s_read_status(void)
     return ret_data;
 }
 
+#define LCD_ID 8
+
+static int get_panel_id_state()
+{
+	uint8_t status = 0;
+
+	gpio_tlmm_config(LCD_ID, 0, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA, GPIO_ENABLE);
+
+	/* Get status of GPIO */
+	status = gpio_status(LCD_ID);
+	dprintf(SPEW, "get_panel_id_state = %d\n",status);
+
+	return status;
+}
+
 /********************************************************************************
  ****detect which panel will be choose
  ********************************************************************************/
@@ -890,7 +905,13 @@ uint32_t panel_detect(uint32_t adc_min,uint32_t adc_max,uint32_t id,uint32_t ic_
 		}else if(9==ic_type){
 		panel_ic_name = mipi_rm68171_id_read(); 
 		}else if(10==ic_type){
-		panel_ic_name = mipi_hx8389b_read_id(); 
+		panel_ic_name = mipi_hx8389b_read_id();
+		#ifdef BOOT_FEATURE_A3001
+		if(panel_ic_name==0x83&&1==get_panel_id_state())
+		{
+			panel_ic_name=0x8394D;
+		}
+		#endif 
 		}else if(11==ic_type){
         	panel_ic_name = mipi_samsung_s6d7aa0x01_read_id(); 
 		}else if(12==ic_type){

@@ -41,7 +41,7 @@
 /* HEADER files                                                              */
 /*---------------------------------------------------------------------------*/
 #include "panel.h"
-#define H8394D_TXD_HD_INNOLUX_550_VIDEO_SIGNATURE 0x83
+#define H8394D_TXD_HD_INNOLUX_550_VIDEO_SIGNATURE 0x8394D
 #define H8394D_TXD_HD_INNOLUX_550_VIDEO_ID 0
 #define H8394D_TXD_HD_INNOLUX_550_VIDEO_ADC_STATUS 0
 #define	H8394D_TXD_HD_INNOLUX_550_VIDEO_IC_TYPE 10
