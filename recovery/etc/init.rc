@@ -47,6 +47,8 @@ on fs
     write /sys/class/android_usb/android0/iSerial ${ro.serialno}
 
 on boot
+	mount ext4 /dev/block/bootdevice/by-name/system /system wait ro
+	mount ext4 /dev/block/bootdevice/by-name/cache /cache nosuid nodev barrier=1
     ifup lo
     hostname localhost
     domainname localdomain
@@ -91,6 +93,8 @@ service healthd /sbin/healthd -r
 
 #service recovery /sbin/recovery
 #    seclabel u:r:recovery:s0
+service rb_ua /sbin/rb_ua --config_file=/etc/rb_ua_r.conf
+     seclabel u:r:recovery:s0
 
 service adbd /sbin/adbd --root_seclabel=u:r:su:s0 --device_banner=recovery
     disabled
