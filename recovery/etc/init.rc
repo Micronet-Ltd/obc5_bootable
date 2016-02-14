@@ -53,6 +53,7 @@ on boot
     hostname localhost
     domainname localdomain
 
+	rm /cache/result
     class_start default
 
 # Load properties from /system/ + /factory after fs mount.
