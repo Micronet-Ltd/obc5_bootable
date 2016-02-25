@@ -96,6 +96,11 @@ service healthd /sbin/healthd -r
 #    seclabel u:r:recovery:s0
 service rb_ua /sbin/rb_ua --config_file=/etc/rb_ua_r.conf
      seclabel u:r:recovery:s0
+	 oneshot
+
+service mcu_ua /sbin/mcu_ua
+     seclabel u:r:recovery:s0
+	 oneshot
 
 service adbd /sbin/adbd --root_seclabel=u:r:su:s0 --device_banner=recovery
     disabled
