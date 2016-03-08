@@ -14,7 +14,8 @@ OBJS += \
 	$(LOCAL_DIR)/jtag.o \
 	$(LOCAL_DIR)/partition_parser.o \
 	$(LOCAL_DIR)/hsusb.o \
-	$(LOCAL_DIR)/boot_stats.o
+	$(LOCAL_DIR)/boot_stats.o \
+	$(LOCAL_DIR)/crc32.o
 
 ifeq ($(ENABLE_SMD_SUPPORT),1)
 OBJS += \
@@ -490,4 +491,8 @@ ifeq ($(ENABLE_USB30_SUPPORT),1)
 		$(LOCAL_DIR)/usb30_dwc_hw.o \
 		$(LOCAL_DIR)/usb30_udc.o \
 		$(LOCAL_DIR)/usb30_wrapper.o
+endif
+
+ifeq ($(ENABLE_REBOOT_MODULE), 1)
+	OBJS += $(LOCAL_DIR)/reboot.o
 endif
