@@ -185,6 +185,24 @@ static void redirect_stdio(const char* filename) {
     freopen(filename, "a", stderr); setbuf(stderr, NULL);
 }
 
+// add by lyf for A3002 ota led support 20160217 begin
+#ifdef FOTA_UPDATE_LED_SUPPORT
+
+void file_write_ehang(char *path, char * string)
+{
+	int tmp_fd,len;
+
+	tmp_fd= open(path,  O_RDWR);
+	if(tmp_fd>0){
+		len=write(tmp_fd, string, strlen(string));
+		close(tmp_fd);
+	}
+	
+}
+
+#endif 
+// add by lyf for A3002 ota led support 20160217 end
+
 // close a file, log an error if the error indicator is set
 static void
 check_and_fclose(FILE *fp, const char *name) {
@@ -1044,6 +1062,13 @@ main(int argc, char **argv) {
     }
     printf("\n");
 
+// add by lyf for A3002 ota led support 20160217 begin	
+#ifdef FOTA_UPDATE_LED_SUPPORT
+	ui->Print("[LED]: begin to update, light the led \n");
+	file_write_ehang("/sys/class/leds/red/brightness","1\n");
+#endif	
+// add by lyf for A3002 ota led support 20160217 end
+	
     if (update_package) {
      #ifdef FOTA_UPDATE_SUPPORT
         update_package = find_update_package(update_package);
@@ -1148,11 +1173,28 @@ main(int argc, char **argv) {
         ui->SetBackground(RecoveryUI::ERROR);
     }
     Device::BuiltinAction after = shutdown_after ? Device::SHUTDOWN : Device::REBOOT;
+// modified by lyf for A3002 ota led support 20160217 begin
+#ifdef FOTA_UPDATE_LED_SUPPORT
+	if (status != INSTALL_SUCCESS ) {
+		ui->Print("[LED]: update failed, blink the led, then reboot\n");
+		int blink_loop = 0;
+		for(blink_loop = 0; blink_loop < 5; blink_loop++)
+		{
+			file_write_ehang("/sys/class/leds/red/brightness","0\n");
+			sleep(1);
+			file_write_ehang("/sys/class/leds/red/brightness","1\n");
+			sleep(1);
+		}
+		
+    }
+#else
     if (status != INSTALL_SUCCESS || ui->IsTextVisible()) {
         ui->ShowText(true);
         Device::BuiltinAction temp = prompt_and_wait(device, status);
         if (temp != Device::NO_ACTION) after = temp;
     }
+#endif
+// modified by lyf for A3002 ota led support 20160217 end
 
     // Save logs and clean up before rebooting or shutting down.
     finish_recovery(send_intent);
@@ -1161,6 +1203,13 @@ main(int argc, char **argv) {
     finish_fota_update(update_package, TEMPORARY_LOG_FILE, status);
 #endif
 
+// add by lyf for A3002 ota led support 20160217 begin
+#ifdef FOTA_UPDATE_LED_SUPPORT
+	ui->Print("[LED]: update success, turn off the led \n");
+	file_write_ehang("/sys/class/leds/red/brightness","0\n");
+#endif
+// add by lyf for A3002 ota led support 20160217 end
+	
     switch (after) {
         case Device::SHUTDOWN:
             ui->Print("Shutting down...\n");
