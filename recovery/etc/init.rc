@@ -47,6 +47,7 @@ on fs
     write /sys/class/android_usb/android0/iSerial ${ro.serialno}
 
 on boot
+	mount vfat /dev/block/mmcblk1p1 /sdcard nosuid nodev barrier=1 wait rw
 	mount ext4 /dev/block/bootdevice/by-name/system /system wait ro
 	mount ext4 /dev/block/bootdevice/by-name/cache /cache nosuid nodev barrier=1
     ifup lo
@@ -54,6 +55,8 @@ on boot
     domainname localdomain
 
 	rm /cache/result
+    #chmod 0775 /sbin/check_update.sh
+
     class_start default
 
 # Load properties from /system/ + /factory after fs mount.
@@ -81,6 +84,12 @@ on late-init
     trigger early-boot
     trigger boot
 
+on property:rb_ua.dp.sdcard=1
+   start rb_ua_sd
+
+on property:rb_ua.dp.sdcard=0
+   start rb_ua
+
 on property:sys.powerctl=*
    powerctl ${sys.powerctl}
 
@@ -92,11 +101,23 @@ service healthd /sbin/healthd -r
     critical
     seclabel u:r:healthd:s0
 
+service check_update /sbin/check_update.sh
+     seclabel u:r:check_update:s0
+#     seclabel u:r:init:s0
+     user root
+	 oneshot
+
 #service recovery /sbin/recovery
 #    seclabel u:r:recovery:s0
 service rb_ua /sbin/rb_ua --config_file=/etc/rb_ua_r.conf
      seclabel u:r:recovery:s0
 	 oneshot
+	 disabled
+
+service rb_ua_sd /sbin/rb_ua --config_file=/etc/rb_ua_r_sd.conf
+     seclabel u:r:recovery:s0
+	 oneshot
+	 disabled
 
 service mcu_ua /sbin/mcu_ua
      seclabel u:r:recovery:s0
