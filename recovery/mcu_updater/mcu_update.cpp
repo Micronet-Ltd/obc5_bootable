@@ -289,7 +289,7 @@ int main(int argc, char **argv)
     char const *mcu_update_got = "/tmp/.rb_mcu_update_got";
     char const *mcu_update_done = "/tmp/.rb_mcu_update_done";
     char const *mcu_binary = "/cache/mcu.bin";
-    char const *tty_n = "/dev/ttyHSL0";
+    char const *tty_n = "/dev/ttyHSL1";
     char s_rec[64], resp[64], rev[32];
     time_t start = time(0);
 
@@ -433,10 +433,10 @@ int main(int argc, char **argv)
         }
 
         resp[2] = 0;
-        if (0 == strncmp(resp, MCU_UPD_AA, 2)) {
+        if (0 == strncmp(resp, MCU_UPD_BB, 2)) {
             strncpy(resp, MCU_UPD_STA, sizeof(MCU_UPD_STA));
             strncpy(s_rec, MCU_UPD_ERA, sizeof(MCU_UPD_ERA));
-        } else if (0 == strncmp(resp, MCU_UPD_BB, 2)) {
+        } else if (0 == strncmp(resp, MCU_UPD_AA, 2)) {
             strncpy(resp, MCU_UPD_STB, sizeof(MCU_UPD_STB));
             strncpy(s_rec, MCU_UPD_ERB, sizeof(MCU_UPD_ERA));
         } else {
@@ -486,10 +486,10 @@ int main(int argc, char **argv)
             }
 
             // skip all not relevant instructions
-            if (S_REC_8 == err || S_REC_9 == err) {
+            if (S_REC_8 == err || S_REC_9 == err || S_REC_7 == err) {
                 // Temporary don't tx reset instruction
                 // tx2mcu(fd_tty, s_rec, strlen(s_rec)); 
-            } else if (S_REC_1 == err || S_REC_2 == err) {
+            } else if (S_REC_1 == err || S_REC_2 == err || S_REC_3 == err) {
                 do {
                     if (0 != tx2mcu(fd_tty, s_rec, strlen(s_rec))) {
                         printf("mcu update[%s]: %s failure to tx s-rec %s\n", __func__, tty_n, strerror(errno));
