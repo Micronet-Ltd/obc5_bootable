@@ -34,10 +34,11 @@
 #include <time.h>
 #include <unistd.h>
 #include <termio.h>
+#include "cutils/properties.h"
+
 #if 0
 #include "bootloader.h"
 #include "common.h"
-#include "cutils/properties.h"
 #include "cutils/android_reboot.h"
 #include "install.h"
 #include "minui/minui.h"
@@ -105,6 +106,29 @@ static time_t gettime(void)
 }
 
 static int wait_for_file(const char *filename, int timeout)
+{
+    struct stat info;
+    time_t timeout_time = gettime() + timeout;
+    int err = -1;
+
+    do {
+        err = stat(filename, &info);
+        if (0 == err || errno != ENOENT) {
+            err = 0;
+            break;
+        }
+
+        if (-1 != timeout) {
+            if (gettime() > timeout_time)
+                break;
+        }
+        usleep(10000);
+    } while (1); 
+
+    return err;
+}
+
+static int check_rb_delta_exist(const char *filename, int timeout)
 {
     struct stat info;
     time_t timeout_time = gettime() + timeout;
@@ -297,7 +321,13 @@ int main(int argc, char **argv)
 
     printf("mcu update[%s]: Starting (pid %d) on %s\n", __func__, getpid(), ctime(&start));
 
-    err = wait_for_file(mcu_update_got, -1);
+    err = check_rb_delta_exist("/sdcard/delta", 1);
+    if (0 == err) {
+        property_set("rb_ua.dp.sdcard", "1");
+    } else{
+        property_set("rb_ua.dp.sdcard", "0");
+    }
+    err = wait_for_file(mcu_update_got, -1); 
     if (0 != err) {
         start = time(&start);
         printf("mcu update[%s]: got doesn't exist %s\n", __func__, ctime(&start));
