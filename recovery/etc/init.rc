@@ -51,8 +51,8 @@ on fs
 
 on boot
 	mount vfat /dev/block/mmcblk1p1 /sdcard nosuid nodev barrier=1 wait rw
-	mount ext4 /dev/block/bootdevice/by-name/system /system wait ro
 	mount ext4 /dev/block/bootdevice/by-name/cache /cache nosuid nodev barrier=1
+
     ifup lo
     hostname localhost
     domainname localdomain
@@ -110,12 +110,6 @@ service iodriver /sbin/iodriver
    seclabel u:r:iodriver:s0
    oneshot
 
-service check_update /sbin/check_update.sh
-     seclabel u:r:check_update:s0
-#     seclabel u:r:init:s0
-     user root
-	 oneshot
-
 #service recovery /sbin/recovery
 #    seclabel u:r:recovery:s0
 service rb_ua /sbin/rb_ua --config_file=/etc/rb_ua_r.conf
@@ -136,6 +130,9 @@ service adbd /sbin/adbd --root_seclabel=u:r:su:s0 --device_banner=recovery
     disabled
     socket adbd stream 660 system system
     seclabel u:r:adbd:s0
+
+on property:rb_ua.sys.upd.done=1
+	mount ext4 /dev/block/bootdevice/by-name/system /system wait ro
 
 on property:iodriver.boot_complete=1
    write /sys/class/leds/vled1/brightness 0
