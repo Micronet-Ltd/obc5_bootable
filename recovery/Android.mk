@@ -88,6 +88,11 @@ LOCAL_STATIC_LIBRARIES += libfotaupdate
 endif
 endif
 
+#add by lyf for A3002 ota led support 20160217
+ifeq ($(strip $(FOTA_UPDATE_LED_SUPPORT)), true)
+LOCAL_CFLAGS += -DFOTA_UPDATE_LED_SUPPORT
+endif
+
 # This binary is in the recovery ramdisk, which is otherwise a copy of root.
 # It gets copied there in config/Makefile.  LOCAL_MODULE_TAGS suppresses
 # a (redundant) copy of the binary in /system/bin for user builds.
@@ -162,4 +167,5 @@ include $(LOCAL_PATH)/minui/Android.mk \
     $(LOCAL_PATH)/edify/Android.mk \
     $(LOCAL_PATH)/uncrypt/Android.mk \
     $(LOCAL_PATH)/updater/Android.mk \
+    $(LOCAL_PATH)/mcu_updater/Android.mk \
     $(LOCAL_PATH)/applypatch/Android.mk

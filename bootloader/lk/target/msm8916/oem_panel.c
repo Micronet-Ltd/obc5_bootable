@@ -48,6 +48,7 @@
 #include "panel_txd_nt35596_1080p_video.h"
 
 #include "panel_h8394d-txd-innolux5p5-hd-video.h"
+#include "panel_h8394f-jd-auo5p5-hd-video.h"
 #include "panel_otm1284_lead_hd_cpt_550_video.h"
 
 #define DISPLAY_MAX_PANEL_DETECTION 6
@@ -247,6 +248,31 @@ static int init_panel_data(struct panel_struct *panelstruct,
 		pinfo->mipi.adc_max = H8394D_TXD_HD_INNOLUX_550_VIDEO_ADC_MAX;
 		pinfo->mipi.adc_min = H8394D_TXD_HD_INNOLUX_550_VIDEO_ADC_MIN;
 		break;
+	case H8394F_JD_HD_AUO_VIDEO_PANEL:
+		panelstruct->paneldata    = &h8394f_jd_hd_auo_hd_550_video_panel_data;
+		panelstruct->panelres     = &h8394f_jd_hd_auo_hd_550_video_panel_res;
+		panelstruct->color        = &h8394f_jd_hd_auo_hd_550_video_color;
+		panelstruct->videopanel   = &h8394f_jd_hd_auo_hd_550_video_video_panel;
+		panelstruct->commandpanel = &h8394f_jd_hd_auo_hd_550_video_command_panel;
+		panelstruct->state        = &h8394f_jd_hd_auo_hd_550_video_state;
+		panelstruct->laneconfig   = &h8394f_jd_hd_auo_hd_550_video_lane_config;
+		panelstruct->paneltiminginfo
+					 = &h8394f_jd_hd_auo_hd_550_video_timing_info;
+		panelstruct->panelresetseq
+					= &h8394f_jd_hd_auo_hd_550_video_panel_reset_seq;
+		panelstruct->backlightinfo = &h8394f_jd_hd_auo_hd_550_video_backlight;
+		pinfo->mipi.panel_cmds
+					= h8394f_jd_hd_auo_hd_550_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= H8394F_JD_HD_AUO_550_VIDEO_ON_COMMAND;
+		memcpy(phy_db->timing,
+				h8394f_jd_hd_auo_hd_550_video_timings, TIMING_SIZE);
+		pinfo->mipi.signature = H8394F_JD_HD_AUO_550_VIDEO_SIGNATURE;
+		pinfo->mipi.lcd_adc = H8394F_JD_HD_AUO_550_VIDEO_ADC_STATUS;
+		pinfo->mipi.ic_type = H8394F_JD_HD_AUO_550_VIDEO_IC_TYPE;
+		pinfo->mipi.adc_max = H8394F_JD_HD_AUO_550_VIDEO_ADC_MAX;
+		pinfo->mipi.adc_min = H8394F_JD_HD_AUO_550_VIDEO_ADC_MIN;
+		break;
 	case OTM1284_LEAD_HD_CPT_VIDEO_PANEL:
 		panelstruct->paneldata    = &otm1284_lead_hd_cpt_hd_550_video_panel_data;
 		panelstruct->panelres     = &otm1284_lead_hd_cpt_hd_550_video_panel_res;
@@ -356,14 +382,17 @@ int oem_panel_select(const char *panel_name, struct panel_struct *panelstruct,
 			dprintf(CRITICAL,"Panle_id is %d,auto_pan_loop is %d\n",
                                                     panel_id,auto_pan_loop);
 #endif
-#ifdef BOOT_FEATURE_A3001
+#if defined(BOOT_FEATURE_A3001) || defined(BOOT_FEATURE_A3002)
 			panel_id = H8394D_TXD_HD_INNOLUX_VIDEO_PANEL;
 			switch (auto_pan_loop){                
 				case 0:
 					panel_id = H8394D_TXD_HD_INNOLUX_VIDEO_PANEL;
 				break;
 				case 1:
-					panel_id = OTM1284_LEAD_HD_CPT_VIDEO_PANEL;					
+					panel_id = H8394F_JD_HD_AUO_VIDEO_PANEL;
+				break;
+				case 2:
+					panel_id = OTM1284_LEAD_HD_CPT_VIDEO_PANEL;						
 				break;
 				default:
 					panel_id = UNKNOWN_PANEL;
