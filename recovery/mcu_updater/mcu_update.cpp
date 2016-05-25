@@ -66,8 +66,17 @@ extern "C" {
 #define MCU_UPD_AA      "AA"
 #define MCU_UPD_BB      "BB"
 
-#define MCU_UPD_LOG "/cache/mcu_ua.log"
+#define MCU_UPD_TX_TO   -1
+#define MCU_UPD_RX_TO   1000
 
+#define MCU_UPD_LOG     "/cache/mcu_ua.log"
+#define TTYHSL0_UPD_LOG "/dev/ttyHSL0"
+
+#undef REDIRECT_STDIO
+//#define REDIRECT_STDIO MCU_UPD_LOG
+#define REDIRECT_STDIO TTYHSL0_UPD_LOG
+
+#if defined (REDIRECT_STDIO)
 static void redirect_stdio(const char* filename)
 {
     // If these fail, there's not really anywhere to complain...
@@ -76,6 +85,7 @@ static void redirect_stdio(const char* filename)
     freopen(filename, "a", stderr);
     setbuf(stderr, 0);
 }
+#endif
 
 // close a file, log an error if the error indicator is set
 static void check_and_fclose(FILE *fp, const char *name)
@@ -312,12 +322,16 @@ int main(int argc, char **argv)
     struct stat info;
     char const *mcu_update_got = "/tmp/.rb_mcu_update_got";
     char const *mcu_update_done = "/tmp/.rb_mcu_update_done";
-    char const *mcu_binary = "/cache/mcu.bin";
+    char const *mcu_binary = "/cache/mcu0.bin";
+    char const *mcu_binary2 = "/cache/mcu1.bin";
+    char *mcu_srec, *sta, *er;
     char const *tty_n = "/dev/ttyHSL1";
     char s_rec[64], resp[64], rev[32];
     time_t start = time(0);
 
-    redirect_stdio(MCU_UPD_LOG);
+#if defined (REDIRECT_STDIO)
+    redirect_stdio(REDIRECT_STDIO);
+#endif
 
     printf("mcu update[%s]: Starting (pid %d) on %s\n", __func__, getpid(), ctime(&start));
 
@@ -327,18 +341,20 @@ int main(int argc, char **argv)
     } else{
         property_set("rb_ua.dp.sdcard", "0");
     }
-    err = wait_for_file(mcu_update_got, -1); 
+
+    err = wait_for_file(mcu_update_got, 10000); 
     if (0 != err) {
         start = time(&start);
         printf("mcu update[%s]: got doesn't exist %s\n", __func__, ctime(&start));
     }
 
-    chmod(mcu_binary, S_IRUSR | S_IRGRP | S_IROTH);
-    fi = fopen(mcu_binary, "r");
-    if (!fi) {
-        printf("mcu update[%s]: %s doesn't exist %s\n", __func__, mcu_binary, strerror(errno));
-        redirect_stdio("/dev/tty");
-        return EXIT_FAILURE;
+    err = wait_for_file(mcu_binary, 1000); 
+    if (0 == err) {
+        chmod(mcu_binary, S_IRUSR | S_IRGRP | S_IROTH);
+    }
+    err = wait_for_file(mcu_binary2, 1000); 
+    if (0 == err) {
+        chmod(mcu_binary2, S_IRUSR | S_IRGRP | S_IROTH);
     }
 
     start = time(&start);
@@ -347,8 +363,9 @@ int main(int argc, char **argv)
     fd_tty = open(tty_n, O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd_tty < 0) {
         printf("mcu update[%s]: %s failure to open terminal %s\n", __func__, tty_n, strerror(errno));
-        fclose(fi);
+#if defined (REDIRECT_STDIO)
         redirect_stdio("/dev/tty");
+#endif
         return EXIT_FAILURE;
     }
 
@@ -380,8 +397,9 @@ int main(int argc, char **argv)
     } else {
         printf("mcu update[%s]: %s invalid terminal %s\n", __func__, tty_n, strerror(errno));
         close(fd_tty);
-        fclose(fi);
+#if defined (REDIRECT_STDIO)
         redirect_stdio("/dev/tty");
+#endif
         return EXIT_FAILURE;
     }
 
@@ -393,16 +411,48 @@ int main(int argc, char **argv)
             break;
         }
 
-        err = mcu2rx(fd_tty, resp, 8, -1);
+        err = mcu2rx(fd_tty, rev, 8, MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on rev cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
-        resp[7] = 0;
+        rev[8] = 0;
         //if (0 == strncmp(resp, MCU_UPD_ERR, strlen(MCU_UPD_ERR))) {
         //    printf("mcu update[%s]: %s invalid rev cmd %s\n", __func__, tty_n, strerror(errno));
         //    break;
         //}
+
+        // check execution location, start address in flash (P Flash/FlashNVM)
+        //
+        if (0 != tx2mcu(fd_tty, (char *)MCU_UPD_RAB, strlen(MCU_UPD_RAB))) {
+            printf("mcu update[%s]: %s failure to transmit execution location cmd %s\n", __func__, tty_n, strerror(errno));
+            break;
+        }
+        err = mcu2rx(fd_tty, resp, 2, MCU_UPD_RX_TO);
+        if (0 != err) {
+            printf("mcu update[%s]: %s mcu don't respond on execution location cmd %s\n", __func__, tty_n, strerror(errno));
+            break;
+        }
+
+        resp[2] = 0;
+        if (0 == strncmp(resp, MCU_UPD_BB, 2)) {
+            sta = (char *)MCU_UPD_STA;
+            er  = (char *)MCU_UPD_ERA;
+            mcu_srec = (char *)mcu_binary;
+        } else if (0 == strncmp(resp, MCU_UPD_AA, 2)) {
+            sta = (char *)MCU_UPD_STB;
+            er  = (char *)MCU_UPD_ERB;
+            mcu_srec = (char *)mcu_binary2;
+        } else {
+            printf("mcu update[%s]: invalid execution location %s\n", __func__, resp);
+            break;
+        }
+
+        fi = fopen(mcu_srec, "r");
+        if (!fi) {
+            printf("mcu update[%s]: %s doesn't exist %s\n", __func__, mcu_srec, strerror(errno));
+            break;
+        }
 
         if (!fgets(s_rec, sizeof(s_rec) - 1, fi)) {
             printf("mcu update[%s]: %s revision failure %s\n", __func__, tty_n, strerror(errno));
@@ -423,7 +473,7 @@ int main(int argc, char **argv)
 
         err -= 3;           // 16-bit address "0000" and check sum
         i = (3 << 1) + 2;   // S0 and 16-bit address
-        printf("mcu update[%s]: %s len %d\n", __func__, s_rec, err);
+        printf("mcu update[%s]: %s[%s len %d]\n", __func__, mcu_srec, s_rec, err);
         while (err > 0) {
             int ch;
             if ((ch = hex2ch(&s_rec[i])) < 0) {
@@ -441,46 +491,32 @@ int main(int argc, char **argv)
         }
 
         s_rec[(i - 8)>>1] = 0;
-        if (0 != strncmp(resp, s_rec, strlen(resp))) {
-            printf("mcu update[%s]: %s invalid version %s\n", __func__, resp, s_rec);
-            // Vladimir:
-            // temporary for debugging purposes only
-            // TODO: proper version check
-            //
-            //break;
-        }
+//        if (0 != strncmp(rev, s_rec, strlen(s_rec))) {
+            printf("mcu update[%s]: version %s <---- %s\n", __func__, rev, s_rec);
+//        }
 
-        // check execution location, start address in flash (P Flash/FlashNVM)
-        //
-        if (0 != tx2mcu(fd_tty, (char *)MCU_UPD_RAB, strlen(MCU_UPD_RAB))) {
-            printf("mcu update[%s]: %s failure to transmit execution location cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
-        err = mcu2rx(fd_tty, resp, 2, -1);
-        if (0 != err) {
-            printf("mcu update[%s]: %s mcu don't respond on execution location cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
+        i = err = 2;
+        do {
+            if (hex2ch(&rev[i]) < hex2ch(&s_rec[i])) {
+                err = 0;
+                break;
+            }
+            i += 2;
+        } while (i < strlen(rev));
 
-        resp[2] = 0;
-        if (0 == strncmp(resp, MCU_UPD_BB, 2)) {
-            strncpy(resp, MCU_UPD_STA, sizeof(MCU_UPD_STA));
-            strncpy(s_rec, MCU_UPD_ERA, sizeof(MCU_UPD_ERA));
-        } else if (0 == strncmp(resp, MCU_UPD_AA, 2)) {
-            strncpy(resp, MCU_UPD_STB, sizeof(MCU_UPD_STB));
-            strncpy(s_rec, MCU_UPD_ERB, sizeof(MCU_UPD_ERA));
-        } else {
-            printf("mcu update[%s]: invalid execution location %s\n", __func__, resp);
+        if (err != 0) {
+            printf("mcu update[%s]: update is older\n", __func__);
             break;
         }
 
         // tx start command
         //
-        if (0 != tx2mcu(fd_tty, resp, strlen(resp))) {
+        printf("mcu update[%s]: start update [%s]\n", __func__, sta);
+        if (0 != tx2mcu(fd_tty, sta, strlen(sta))) {
             printf("mcu update[%s]: %s failure to start update cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
-        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), -1);
+        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on start update cmd %s\n", __func__, tty_n, strerror(errno));
             break;
@@ -493,11 +529,12 @@ int main(int argc, char **argv)
 
         // tx erase command
         //
-        if (0 != tx2mcu(fd_tty, s_rec, strlen(s_rec))) {
+        printf("mcu update[%s]: erase pflash/nvmflash region [%s]\n", __func__, er);
+        if (0 != tx2mcu(fd_tty, er, strlen(er))) {
             printf("mcu update[%s]: %s failure to erase cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
-        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), -1);
+        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), 4*MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on erase cmd %s\n", __func__, tty_n, strerror(errno));
             break;
@@ -508,6 +545,7 @@ int main(int argc, char **argv)
             break;
         }
 
+        printf("mcu update[%s]: send records\n", __func__);
         while (fgets(s_rec, sizeof(s_rec) - 1, fi)) {
             s_rec[sizeof(s_rec) - 1] = 0;
 
@@ -526,7 +564,7 @@ int main(int argc, char **argv)
                         break;
                     }
                     memset(resp, 0, strlen(MCU_UPD_nRDY));
-                    err = mcu2srec_rx(fd_tty, resp, strlen(MCU_UPD_nRDY), -1);
+                    err = mcu2srec_rx(fd_tty, resp, strlen(MCU_UPD_nRDY), MCU_UPD_RX_TO);
                     if (err < 0) {
                         printf("mcu update[%s]: mcu don't respond on tx s-rec %s\n", __func__, s_rec);
                     } else if (1 == err) {
@@ -541,6 +579,7 @@ int main(int argc, char **argv)
             }
         }
 
+        printf("mcu update[%s]: signal about update done\n", __func__);
         if (0 != tx2mcu(fd_tty, (char *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
             printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
         }
@@ -548,12 +587,15 @@ int main(int argc, char **argv)
 
     close(fd_tty);
     fclose(fi);
+
+    printf("Done\n");
+#if defined (REDIRECT_STDIO)
+    redirect_stdio("/dev/tty");
+#endif
+
     fd_done = open(mcu_update_done, O_WRONLY|O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     close(fd_done);
 //    usleep(10000000);
-
-    printf("Done\n");
-    redirect_stdio("/dev/tty");
 
     return EXIT_SUCCESS;
 } 
