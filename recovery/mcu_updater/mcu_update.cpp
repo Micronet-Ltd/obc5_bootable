@@ -52,6 +52,10 @@ extern "C" {
 #include "fuse_sdcard_provider.h"
 }
 #endif
+#define MCU_UPD_SPI_FLASH_PAGE_L 256
+#define MCU_UPD_FPGA_REV         "FRE"
+#define MCU_UPD_FPGA_STF         "STF"
+#define MCU_UPD_FPGA_nCRC        "nCRC"
 
 #define MCU_UPD_REV     "REV"
 #define MCU_UPD_STA     "STA"
@@ -67,14 +71,14 @@ extern "C" {
 #define MCU_UPD_BB      "BB"
 
 #define MCU_UPD_TX_TO   -1
-#define MCU_UPD_RX_TO   1000
+#define MCU_UPD_RX_TO   4
 
 #define MCU_UPD_LOG     "/cache/mcu_ua.log"
 #define TTYHSL0_UPD_LOG "/dev/ttyHSL0"
 
 #undef REDIRECT_STDIO
-//#define REDIRECT_STDIO MCU_UPD_LOG
-#define REDIRECT_STDIO TTYHSL0_UPD_LOG
+#define REDIRECT_STDIO MCU_UPD_LOG
+//#define REDIRECT_STDIO TTYHSL0_UPD_LOG
 
 #if defined (REDIRECT_STDIO)
 static void redirect_stdio(const char* filename)
@@ -123,14 +127,20 @@ static int wait_for_file(const char *filename, int timeout)
 
     do {
         err = stat(filename, &info);
-        if (0 == err || errno != ENOENT) {
-            err = 0;
+        if (0 == err) {
+            printf("mcu update[%s]: %s found\n", __func__, filename);
             break;
         }
 
+        if (errno == ENOENT) {
+            //printf("mcu update[%s]: %s not found\n", __func__, filename);
+        }
+
         if (-1 != timeout) {
-            if (gettime() > timeout_time)
+            if (gettime() > timeout_time) {
+                printf("mcu update[%s]: %s timeout\n", __func__, filename);
                 break;
+            }
         }
         usleep(10000);
     } while (1); 
@@ -138,6 +148,7 @@ static int wait_for_file(const char *filename, int timeout)
     return err;
 }
 
+#if 0
 static int check_rb_delta_exist(const char *filename, int timeout)
 {
     struct stat info;
@@ -146,20 +157,27 @@ static int check_rb_delta_exist(const char *filename, int timeout)
 
     do {
         err = stat(filename, &info);
-        if (0 == err || errno != ENOENT) {
-            err = 0;
+        if (0 == err) {
+            printf("mcu update[%s]: %s found\n", __func__, filename);
             break;
         }
 
+        if (errno == ENOENT) {
+           // printf("mcu update[%s]: %s not found\n", __func__, filename);
+        }
+
         if (-1 != timeout) {
-            if (gettime() > timeout_time)
+            if (gettime() > timeout_time) {
+                printf("mcu update[%s]: %s time out\n", __func__, filename);
                 break;
+            }
         }
         usleep(10000);
     } while (1); 
 
     return err;
 }
+#endif
 
 #define S_REC_0 0
 #define S_REC_1 1
@@ -172,7 +190,7 @@ static int check_rb_delta_exist(const char *filename, int timeout)
 #define S_REC_8 8
 #define S_REC_9 9
 
-int pars_srec(char *s_rec, int len)
+static int pars_srec(char *s_rec, int len)
 {
     int s_rec_t = -1;
 
@@ -203,7 +221,23 @@ int pars_srec(char *s_rec, int len)
     return -1;
 }
 
-char hex2ch(char *num)
+static void num2hex(uint32_t n, char *hex)
+{
+    uint32_t mask = 0xF0000000, shift = 28;
+
+    if (!hex) {
+        return;
+    }
+
+    do {
+        *hex++ = 0x30;
+        *hex++ = (n & mask)>>shift;
+        mask >>= 4;
+        shift -= 4;
+    } while (mask);
+}
+
+static char hex2ch(char *num)
 {
     int digh, digl;
     digh = ('0' <= num[0] && num[0] <= '9') ? num[0] - '0':
@@ -225,7 +259,7 @@ char hex2ch(char *num)
     return (digh << 4) | digl; 
 }
 
-int tx2mcu(int fd_tty, char *s_rec, int len)
+static int tx2mcu(int fd_tty, uint8_t *s_rec, int len)
 {
     int xferd;
     //printf("mcu update[%s]: s-record %s\n", __func__, s_rec);
@@ -248,7 +282,7 @@ int tx2mcu(int fd_tty, char *s_rec, int len)
     return 0;
 }
 
-int mcu2rx(int fd_tty, char *buf, int len, int tout)
+static int mcu2rx(int fd_tty, char *buf, int len, int tout)
 {
     int xferd;
     time_t timeout_time = gettime() + tout;
@@ -274,7 +308,7 @@ int mcu2rx(int fd_tty, char *buf, int len, int tout)
     return 0;
 }
 
-int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
+static int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
 {
     int xferd, err = -1;
     time_t timeout_time = gettime() + tout;
@@ -296,7 +330,10 @@ int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
         }
         len -= xferd;
         r += xferd;
-        if (0 == strncmp(buf, MCU_UPD_nRDY, strlen(MCU_UPD_nRDY))) {
+        if (0 == strncmp(buf, MCU_UPD_FPGA_nCRC, strlen(MCU_UPD_FPGA_nCRC))) {
+            err = 2;
+            break;
+        } else if (0 == strncmp(buf, MCU_UPD_nRDY, strlen(MCU_UPD_nRDY))) {
             err = 1;
             break;
         } else if (0 == strncmp(buf, MCU_UPD_ERR, strlen(MCU_UPD_ERR))) {
@@ -311,22 +348,97 @@ int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
     return err;
 }
 
+#define CRC32_POLINOMIAL 0xEDB88320
+static uint32_t crc_32(uint8_t *page, int len) {
+   int i, j;
+   uint32_t crc, m;
+
+   i = 0;
+   crc = 0xFFFFFFFF;
+   for (i = 0; i < len; i++) {
+      crc = crc ^ (uint32_t)page[i];
+      for (j = 7; j >= 0; j--) {    // Do eight times.
+         m = -(crc & 1);
+         crc = (crc >> 1) ^ (CRC32_POLINOMIAL & m);
+      }
+   }
+
+   return ~crc;
+}
+
+static int fpga_need_for_update(FILE *f, const char *rev) {
+    int rd;
+    char b[128], *pb;
+    time_t t_r, t_f;
+    tm tm_r, tm_f;
+
+    rd = fread(b, 1, 82, f);
+    b[rd-1] = 0;
+    if (rd != 82) {
+        return 0;
+    }
+
+    if (0 != strncmp(&b[2], "Lattice", 7)) {
+        return 0;
+    }
+    if (0 != strncmp(&b[31], "Part: iCE40HX4K-CB132", 21)) {
+        return 0;
+    }
+
+    pb = strtok(b, "Date:");
+    if (!pb) {
+        return 0;
+    }
+
+    do {
+        if (*pb != ' ')
+            break;
+    } while (*pb++);
+
+    if (0 != *pb) {
+        // Vladimir
+        // TODO: real revision check
+        //
+        strptime(pb, "%b %d %Y %H:%M:%S", &tm_f);
+        strptime(rev, "%b %d %Y %H:%M:%S", &tm_r);
+
+        t_r = mktime(&tm_r);
+        t_f = mktime(&tm_f);
+        //if (difftime(t_f, t_r) < 0) {
+            return 1;
+        //}
+#if 0
+        rd = min(strlen(rev), strlen(pb))
+        do {
+            if (*rev++ < *pb++) {
+                return 1;
+            }
+        } while (red--);
+#endif
+    }
+
+    return 0;
+}
+
 // Vladimir:
 // All timeouts set to ifinite for debugging purposes only
 // TODO: set relevant timeouts values
 //
 int main(int argc, char **argv)
 {
-    int fd_tty, fd_done, err, i;
+    int fd_tty, fd_done, err, i, fpga_update;
     FILE *fi;
     struct stat info;
     char const *mcu_update_got = "/tmp/.rb_mcu_update_got";
     char const *mcu_update_done = "/tmp/.rb_mcu_update_done";
     char const *mcu_binary = "/cache/mcu0.bin";
     char const *mcu_binary2 = "/cache/mcu1.bin";
+    char const *fpga_binary = "/cache/fpga.bin";
+//    char const *recovery_list = "/sdcard/recovery-list.txt";
     char *mcu_srec, *sta, *er;
     char const *tty_n = "/dev/ttyHSL1";
     char s_rec[64], resp[64], rev[32];
+    uint8_t flash_page[260];
     time_t start = time(0);
 
 #if defined (REDIRECT_STDIO)
@@ -334,30 +446,60 @@ int main(int argc, char **argv)
 #endif
 
     printf("mcu update[%s]: Starting (pid %d) on %s\n", __func__, getpid(), ctime(&start));
-
-    err = check_rb_delta_exist("/sdcard/delta", 1);
+/*
+    err = wait_for_file(recovery_list, 4);
     if (0 == err) {
+        start = time(&start);
+        printf("mcu update[%s]: recovery list exists %s\n", __func__, ctime(&start));
+        mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME);
+#if 0
+        do {
+            ;
+        } while (1);
+#endif
+    }
+*/
+    err = wait_for_file("/sdcard/delta", 1);
+    start = time(&start);
+    if (0 == err) {
+        printf("mcu update[%s]: sdcard zero delta %s\n", __func__, ctime(&start));
         property_set("rb_ua.dp.sdcard", "1");
     } else{
+        printf("mcu update[%s]: regular delta %s\n", __func__, ctime(&start));
         property_set("rb_ua.dp.sdcard", "0");
     }
 
-    err = wait_for_file(mcu_update_got, 10000); 
+    printf("mcu update[%s]: wait for rb_ua %s\n", __func__, ctime(&start));
+    err = wait_for_file(mcu_update_got, -1);
+    start = time(&start);
     if (0 != err) {
-        start = time(&start);
         printf("mcu update[%s]: got doesn't exist %s\n", __func__, ctime(&start));
     }
 
-    err = wait_for_file(mcu_binary, 1000); 
+    printf("mcu update[%s]: wait for mcu s-rec files %s\n", __func__, ctime(&start));
+    err = wait_for_file(mcu_binary, 4); 
     if (0 == err) {
         chmod(mcu_binary, S_IRUSR | S_IRGRP | S_IROTH);
     }
-    err = wait_for_file(mcu_binary2, 1000); 
+    err = wait_for_file(mcu_binary2, 4); 
     if (0 == err) {
         chmod(mcu_binary2, S_IRUSR | S_IRGRP | S_IROTH);
     }
 
     start = time(&start);
+    printf("mcu update[%s]: wait for FPGA binary %s\n", __func__, ctime(&start));
+    fpga_update = 0;
+    err = wait_for_file(fpga_binary, 4); 
+    start = time(&start);
+    if (0 == err) {
+        err = stat(fpga_binary, &info);
+        if (0 == err) {
+            chmod(fpga_binary, S_IRUSR | S_IRGRP | S_IROTH);
+            printf("mcu update[%s]: FPGA update is present %s\n", __func__, ctime(&start));
+            fpga_update = 1;
+        }
+    }
+
     printf("mcu update[%s]: got on %s\n", __func__, ctime(&start));
 
     fd_tty = open(tty_n, O_RDWR | O_NOCTTY | O_NONBLOCK);
@@ -404,9 +546,98 @@ int main(int argc, char **argv)
     }
 
     do {
+        fi = 0;
+        // check fpga version
+        //
+        if (fpga_update) {
+            if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_FPGA_REV, strlen(MCU_UPD_FPGA_REV))) {
+                printf("mcu update[%s]: %s failure to transmit fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
+                break;
+            }
+
+            err = mcu2rx(fd_tty, rev, 28, MCU_UPD_RX_TO);
+            if (0 == err) {
+                printf("mcu update[%s]: %s mcu support fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
+                rev[28] = 0;
+                fi = fopen(fpga_binary, "r");
+                if (fi) {
+                    if (fpga_need_for_update(fi, rev)) {
+                        //  fseek(fi, 0, SEEK_SET);
+                        rewind(fi);
+
+                        num2hex(info.st_size, rev);
+                        rev[17] = 0;
+                        sprintf(s_rec, "%s%s", MCU_UPD_FPGA_STF, rev);
+
+                        // tx start command
+                        //
+                        printf("mcu update[%s]: start update [%s]\n", __func__, s_rec);
+                        if (0 != tx2mcu(fd_tty, (uint8_t *)s_rec, strlen(s_rec)+1)) {
+                            printf("mcu update[%s]: %s failure to start FPGA update cmd %s\n", __func__, tty_n, strerror(errno));
+                            break;
+                        }
+                        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), MCU_UPD_RX_TO);
+                        if (0 != err) {
+                            printf("mcu update[%s]: %s mcu don't respond on start FPGA update cmd %s\n", __func__, tty_n, strerror(errno));
+                        } else {
+                            do {
+                                i = fread(flash_page, 1, MCU_UPD_SPI_FLASH_PAGE_L, fi); 
+                                if (i) {
+                                    uint32_t crc;
+
+                                    //memset(&flash_page[i], 0, sizeof(flash_page) - i);
+                                    //crc = crc_32(flash_page, MCU_UPD_SPI_FLASH_PAGE_L);
+                                    crc = crc_32(flash_page, i);
+                                    //flash_page[MCU_UPD_SPI_FLASH_PAGE_L]   = crc         & 0xFF;
+                                    //flash_page[MCU_UPD_SPI_FLASH_PAGE_L+1] = (crc >>  8) & 0xFF;
+                                    //flash_page[MCU_UPD_SPI_FLASH_PAGE_L+2] = (crc >> 16) & 0xFF;
+                                    //flash_page[MCU_UPD_SPI_FLASH_PAGE_L+3] = (crc >> 24) & 0xFF;
+                                    flash_page[i]   = crc         & 0xFF;
+                                    flash_page[i+1] = (crc >>  8) & 0xFF;
+                                    flash_page[i+2] = (crc >> 16) & 0xFF;
+                                    flash_page[i+3] = (crc >> 24) & 0xFF;
+                                    do {
+                                        //err = tx2mcu(fd_tty, flash_page, sizeof(flash_page));
+                                        err = tx2mcu(fd_tty, flash_page, i+4);
+                                        if (0 != err) {
+                                            printf("mcu update[%s]: %s failure to tx flash page %s\n", __func__, tty_n, strerror(errno));
+                                            break;
+                                        }
+                                        memset(resp, 0, strlen(MCU_UPD_nRDY));
+                                        err = mcu2srec_rx(fd_tty, resp, strlen(MCU_UPD_nRDY), MCU_UPD_RX_TO);
+                                        if (err < 0) {
+                                            printf("mcu update[%s]: mcu don't respond on tx flash page %s\n", __func__, s_rec);
+                                        } else if (1 == err) {
+                                            printf("mcu update[%s]: mcu not ready\n", __func__);
+                                        } else if (2 == err) {
+                                            printf("mcu update[%s]: CRC error\n", __func__);
+                                        }
+                                    } while (1 == err || 2 == err);
+
+                                    if (0 != err) {
+                                        break;
+                                    }
+                                }
+                            } while (i == MCU_UPD_SPI_FLASH_PAGE_L);
+
+                            printf("mcu update[%s]: signal about update done\n", __func__);
+                            if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
+                                printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
+                            }
+                        }
+                    }
+                    fclose(fi);
+                } else {
+                    printf("mcu update[%s]: %s doesn't exist %s\n", __func__, fpga_binary, strerror(errno));
+                }
+            } else {
+                printf("mcu update[%s]: %s mcu doesn't support fpga rev cmd, SPI Flash won't updated %s\n", __func__, tty_n, strerror(errno));
+            }
+        }
+
         // check version
         //
-        if (0 != tx2mcu(fd_tty, (char *)MCU_UPD_REV, strlen(MCU_UPD_REV))) {
+        if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_REV, strlen(MCU_UPD_REV))) {
             printf("mcu update[%s]: %s failure to transmit rev cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
@@ -424,7 +655,7 @@ int main(int argc, char **argv)
 
         // check execution location, start address in flash (P Flash/FlashNVM)
         //
-        if (0 != tx2mcu(fd_tty, (char *)MCU_UPD_RAB, strlen(MCU_UPD_RAB))) {
+        if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_RAB, strlen(MCU_UPD_RAB))) {
             printf("mcu update[%s]: %s failure to transmit execution location cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
@@ -502,7 +733,7 @@ int main(int argc, char **argv)
                 break;
             }
             i += 2;
-        } while (i < strlen(rev));
+        } while ((unsigned int)i < strlen(rev));
 
         if (err != 0) {
             printf("mcu update[%s]: update is older\n", __func__);
@@ -512,7 +743,7 @@ int main(int argc, char **argv)
         // tx start command
         //
         printf("mcu update[%s]: start update [%s]\n", __func__, sta);
-        if (0 != tx2mcu(fd_tty, sta, strlen(sta))) {
+        if (0 != tx2mcu(fd_tty, (uint8_t *)sta, strlen(sta))) {
             printf("mcu update[%s]: %s failure to start update cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
@@ -530,7 +761,7 @@ int main(int argc, char **argv)
         // tx erase command
         //
         printf("mcu update[%s]: erase pflash/nvmflash region [%s]\n", __func__, er);
-        if (0 != tx2mcu(fd_tty, er, strlen(er))) {
+        if (0 != tx2mcu(fd_tty, (uint8_t *)er, strlen(er))) {
             printf("mcu update[%s]: %s failure to erase cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
@@ -559,7 +790,7 @@ int main(int argc, char **argv)
                 // tx2mcu(fd_tty, s_rec, strlen(s_rec)); 
             } else if (S_REC_1 == err || S_REC_2 == err || S_REC_3 == err) {
                 do {
-                    if (0 != tx2mcu(fd_tty, s_rec, strlen(s_rec))) {
+                    if (0 != tx2mcu(fd_tty, (uint8_t *)s_rec, strlen(s_rec))) {
                         printf("mcu update[%s]: %s failure to tx s-rec %s\n", __func__, tty_n, strerror(errno));
                         break;
                     }
@@ -580,13 +811,15 @@ int main(int argc, char **argv)
         }
 
         printf("mcu update[%s]: signal about update done\n", __func__);
-        if (0 != tx2mcu(fd_tty, (char *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
+        if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
             printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
         }
     } while (0);
 
     close(fd_tty);
-    fclose(fi);
+    if (fi) {
+        fclose(fi); 
+    }
 
     printf("Done\n");
 #if defined (REDIRECT_STDIO)
