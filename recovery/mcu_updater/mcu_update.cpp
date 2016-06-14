@@ -514,6 +514,7 @@ int main(int argc, char **argv)
     if (isatty(fd_tty)) {
         struct termios  ios;
 
+        tcflush(fd_tty,TCIOFLUSH);
         tcgetattr(fd_tty, &ios);
 
         bzero(&ios, sizeof(ios));
@@ -545,10 +546,16 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    usleep(100*1000);
     do {
         fi = 0;
         // check fpga version
         //
+        err = mcu2rx(fd_tty, (char *)flash_page, sizeof(flash_page), MCU_UPD_RX_TO);
+        flash_page[8] = 0;
+        if (0 == err) {
+            printf("mcu update[%s]: %s mcu spurious respons %s\n", __func__, tty_n, flash_page);
+        }
         if (fpga_update) {
             if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_FPGA_REV, strlen(MCU_UPD_FPGA_REV))) {
                 printf("mcu update[%s]: %s failure to transmit fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
@@ -637,17 +644,26 @@ int main(int argc, char **argv)
 
         // check version
         //
+        printf("mcu update[%s]: get mcu rev %s\n", __func__, MCU_UPD_REV);
         if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_REV, strlen(MCU_UPD_REV))) {
             printf("mcu update[%s]: %s failure to transmit rev cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
 
         err = mcu2rx(fd_tty, rev, 8, MCU_UPD_RX_TO);
+        if (0 == err) {
+            if ('E' == rev[0] && 'R' == rev[1]) {
+                printf("mcu update[%s]: %s repeat rev cmd %s\n", __func__, tty_n, strerror(errno)); 
+                tx2mcu(fd_tty, (uint8_t *)MCU_UPD_REV, strlen(MCU_UPD_REV));
+                err = mcu2rx(fd_tty, rev, 8, MCU_UPD_RX_TO);
+            }
+        }
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on rev cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
         rev[8] = 0;
+        printf("mcu update[%s]: mcu rev is %s\n", __func__, rev);
         //if (0 == strncmp(resp, MCU_UPD_ERR, strlen(MCU_UPD_ERR))) {
         //    printf("mcu update[%s]: %s invalid rev cmd %s\n", __func__, tty_n, strerror(errno));
         //    break;
@@ -655,17 +671,28 @@ int main(int argc, char **argv)
 
         // check execution location, start address in flash (P Flash/FlashNVM)
         //
+        usleep(100*1000);
+        resp[0] = 0;
+        printf("mcu update[%s]: get mcu execution location %s[%s]\n", __func__, MCU_UPD_RAB, resp);
         if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_RAB, strlen(MCU_UPD_RAB))) {
             printf("mcu update[%s]: %s failure to transmit execution location cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
         err = mcu2rx(fd_tty, resp, 2, MCU_UPD_RX_TO);
+        if (0 == err) {
+            if ('E' == resp[0] && 'R' == resp[1]) {
+                printf("mcu update[%s]: %s repeat RAB cmd %s\n", __func__, tty_n, strerror(errno));
+                tx2mcu(fd_tty, (uint8_t *)MCU_UPD_RAB, strlen(MCU_UPD_RAB));
+                err = mcu2rx(fd_tty, resp, 2, MCU_UPD_RX_TO);
+            }
+        }
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on execution location cmd %s\n", __func__, tty_n, strerror(errno));
             break;
         }
 
         resp[2] = 0;
+        printf("mcu update[%s]: execution location is %s\n", __func__, resp);
         if (0 == strncmp(resp, MCU_UPD_BB, 2)) {
             sta = (char *)MCU_UPD_STA;
             er  = (char *)MCU_UPD_ERA;
