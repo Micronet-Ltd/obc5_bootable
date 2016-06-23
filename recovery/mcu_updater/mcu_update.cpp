@@ -91,6 +91,11 @@ static void redirect_stdio(const char* filename)
 }
 #endif
 
+static inline uint64_t min(uint64_t x, uint64_t y)
+{
+    return (x < y)?x:y;
+}
+
 // close a file, log an error if the error indicator is set
 static void check_and_fclose(FILE *fp, const char *name)
 {
@@ -267,7 +272,9 @@ static int tx2mcu(int fd_tty, uint8_t *s_rec, int len)
     tcflush(fd_tty, TCIOFLUSH);
 
     do {
+        //usleep(10);
         xferd = write(fd_tty, s_rec, len);
+        //xferd = write(fd_tty, s_rec, 1);
         if (xferd < 0) {
             if (errno == EINTR || errno == EAGAIN) {
                 continue;
@@ -279,7 +286,7 @@ static int tx2mcu(int fd_tty, uint8_t *s_rec, int len)
         s_rec += xferd;
     } while (len); 
 
-    return 0;
+    return len;
 }
 
 static int mcu2rx(int fd_tty, char *buf, int len, int tout)
@@ -305,7 +312,7 @@ static int mcu2rx(int fd_tty, char *buf, int len, int tout)
         buf += xferd;
     } while (len); 
 
-    return 0;
+    return len;
 }
 
 static int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
@@ -346,6 +353,52 @@ static int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
     } while (len); 
 
     return err;
+}
+
+static int tx2mcu_cmd(int fd_tty, char *cmd, char *resp, char *expect[], int tx_len, int rx_len, int repeat, int tout)
+{
+    int i, err;
+
+    if (repeat < 0) {
+        repeat = 1;
+    }
+
+    do {
+        usleep(100*1000);
+        printf("mcu update[%s]: tx %s cmd\n", __func__, cmd);
+        if (0 != tx2mcu(fd_tty, (uint8_t *)cmd, tx_len)) {
+            printf("mcu update[%s]: failure to transfer %s cmd %s\n", __func__, cmd, strerror(errno));
+            break;
+        }
+
+        err = mcu2rx(fd_tty, resp, rx_len, tout);
+        if (err < 0) {
+            printf("mcu update[%s]: critical tty error on %s cmd %s\n", __func__, cmd, strerror(errno));
+            break;
+        }
+
+        if (err == rx_len) {
+            printf("mcu update[%s]: mcu don't respond on %s cmd %s\n", __func__, cmd, strerror(errno));
+            continue;
+        }
+
+        printf("mcu update[%s]: rx %s resp\n", __func__, resp);
+        if (expect[0]) {
+            i = 0;
+            while (expect[i]) {
+                printf("mcu update[%s]: is rx %s equ expected %s\n", __func__, resp, expect[i]);
+                if (0 == strncmp(resp, expect[i], min(rx_len - err, strlen(expect[i]))))
+                    return 0;
+                i++; 
+            }
+        } else if (0 == err && 0 != strncmp(resp, MCU_UPD_ERR, strlen(MCU_UPD_ERR))) {
+            return 0;
+        }
+        printf("mcu update[%s]: repeat\n", __func__);
+    } while (--repeat);
+
+    printf("mcu update[%s]: failure\n", __func__);
+    return -1;
 }
 
 #define CRC32_POLINOMIAL 0xEDB88320
@@ -440,6 +493,7 @@ int main(int argc, char **argv)
     char s_rec[64], resp[64], rev[32];
     uint8_t flash_page[260];
     time_t start = time(0);
+    char *expect[4] = {0};
 
 #if defined (REDIRECT_STDIO)
     redirect_stdio(REDIRECT_STDIO);
@@ -528,7 +582,11 @@ int main(int argc, char **argv)
 
         cfsetospeed(&ios, B115200);
         cfsetispeed(&ios, B115200);
-        ios.c_cflag =  (B115200 | CS8 | CLOCAL | CREAD) & ~(CRTSCTS | CSTOPB | PARENB);
+//        ios.c_cflag =  (B115200 | CS8 | CLOCAL | CREAD) & ~(CRTSCTS | CSTOPB | PARENB);
+        ios.c_cflag =  (B115200 | CS8 | CLOCAL | CREAD | PARENB | PARODD) & ~(CSTOPB | CRTSCTS);
+//        cfsetospeed(&ios, B38400);
+//        cfsetispeed(&ios, B38400);
+//        ios.c_cflag =  (B38400 | CS8 | CLOCAL | CREAD | CSTOPB | PARENB | PARODD) & ~(CRTSCTS);
         ios.c_iflag = 0;
         ios.c_oflag = 0;
         ios.c_lflag = 0;        /* disable ECHO, ICANON, etc... */
@@ -645,19 +703,8 @@ int main(int argc, char **argv)
         // check version
         //
         printf("mcu update[%s]: get mcu rev %s\n", __func__, MCU_UPD_REV);
-        if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_REV, strlen(MCU_UPD_REV))) {
-            printf("mcu update[%s]: %s failure to transmit rev cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
-
-        err = mcu2rx(fd_tty, rev, 8, MCU_UPD_RX_TO);
-        if (0 == err) {
-            if ('E' == rev[0] && 'R' == rev[1]) {
-                printf("mcu update[%s]: %s repeat rev cmd %s\n", __func__, tty_n, strerror(errno)); 
-                tx2mcu(fd_tty, (uint8_t *)MCU_UPD_REV, strlen(MCU_UPD_REV));
-                err = mcu2rx(fd_tty, rev, 8, MCU_UPD_RX_TO);
-            }
-        }
+        expect[0] = 0;
+        err = tx2mcu_cmd(fd_tty, (char *)MCU_UPD_REV, rev, expect, strlen(MCU_UPD_REV), 8, 4, MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on rev cmd %s\n", __func__, tty_n, strerror(errno));
             break;
@@ -671,21 +718,12 @@ int main(int argc, char **argv)
 
         // check execution location, start address in flash (P Flash/FlashNVM)
         //
-        usleep(100*1000);
         resp[0] = 0;
         printf("mcu update[%s]: get mcu execution location %s[%s]\n", __func__, MCU_UPD_RAB, resp);
-        if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_RAB, strlen(MCU_UPD_RAB))) {
-            printf("mcu update[%s]: %s failure to transmit execution location cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
-        err = mcu2rx(fd_tty, resp, 2, MCU_UPD_RX_TO);
-        if (0 == err) {
-            if ('E' == resp[0] && 'R' == resp[1]) {
-                printf("mcu update[%s]: %s repeat RAB cmd %s\n", __func__, tty_n, strerror(errno));
-                tx2mcu(fd_tty, (uint8_t *)MCU_UPD_RAB, strlen(MCU_UPD_RAB));
-                err = mcu2rx(fd_tty, resp, 2, MCU_UPD_RX_TO);
-            }
-        }
+
+        expect[0] = (char *)MCU_UPD_AA;
+        expect[1] = (char *)MCU_UPD_BB;
+        err = tx2mcu_cmd(fd_tty, (char *)MCU_UPD_RAB, resp, expect, strlen(MCU_UPD_RAB), 2, 4, MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on execution location cmd %s\n", __func__, tty_n, strerror(errno));
             break;
@@ -770,36 +808,22 @@ int main(int argc, char **argv)
         // tx start command
         //
         printf("mcu update[%s]: start update [%s]\n", __func__, sta);
-        if (0 != tx2mcu(fd_tty, (uint8_t *)sta, strlen(sta))) {
-            printf("mcu update[%s]: %s failure to start update cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
-        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), MCU_UPD_RX_TO);
+        expect[0] = (char *)MCU_UPD_OK;
+        expect[1] = 0;
+        err = tx2mcu_cmd(fd_tty, sta, resp, expect, strlen(sta), strlen(MCU_UPD_OK), 4, MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on start update cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
-
-        if (0 != strncmp(resp, MCU_UPD_OK, strlen(MCU_UPD_OK))) {
-            printf("mcu update[%s]: %s failure to start update %s\n", __func__, tty_n, strerror(errno));
             break;
         }
 
         // tx erase command
         //
         printf("mcu update[%s]: erase pflash/nvmflash region [%s]\n", __func__, er);
-        if (0 != tx2mcu(fd_tty, (uint8_t *)er, strlen(er))) {
-            printf("mcu update[%s]: %s failure to erase cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
-        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), 4*MCU_UPD_RX_TO);
+        expect[0] = (char *)MCU_UPD_OK;
+        expect[1] = 0;
+        err = tx2mcu_cmd(fd_tty, er, resp, expect, strlen(er), strlen(MCU_UPD_OK), 4, 4*MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on erase cmd %s\n", __func__, tty_n, strerror(errno));
-            break;
-        }
-
-        if (0 != strncmp(resp, MCU_UPD_OK, strlen(MCU_UPD_OK))) {
-            printf("mcu update[%s]: %s failure to erase %s\n", __func__, tty_n, strerror(errno));
             break;
         }
 
@@ -812,11 +836,15 @@ int main(int argc, char **argv)
             }
 
             // skip all not relevant instructions
+#if 0
             if (S_REC_8 == err || S_REC_9 == err || S_REC_7 == err) {
                 // Temporary don't tx reset instruction
                 // tx2mcu(fd_tty, s_rec, strlen(s_rec)); 
             } else if (S_REC_1 == err || S_REC_2 == err || S_REC_3 == err) {
+#endif
+            if (S_REC_1 == err || S_REC_2 == err || S_REC_3 == err || S_REC_8 == err || S_REC_9 == err || S_REC_7 == err) {
                 do {
+                    //usleep(10*1000);
                     if (0 != tx2mcu(fd_tty, (uint8_t *)s_rec, strlen(s_rec))) {
                         printf("mcu update[%s]: %s failure to tx s-rec %s\n", __func__, tty_n, strerror(errno));
                         break;
@@ -838,8 +866,11 @@ int main(int argc, char **argv)
         }
 
         printf("mcu update[%s]: signal about update done\n", __func__);
-        if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
-            printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
+        usleep(100*1000);
+        if (0 == err) {
+            if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
+                printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
+            }
         }
     } while (0);
 
