@@ -477,6 +477,8 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
 // All timeouts set to ifinite for debugging purposes only
 // TODO: set relevant timeouts values
 //
+int fastboot_init(void);
+
 int main(int argc, char **argv)
 {
     int fd_tty, fd_done, err, i, fpga_update;
@@ -487,7 +489,7 @@ int main(int argc, char **argv)
     char const *mcu_binary = "/cache/mcu0.bin";
     char const *mcu_binary2 = "/cache/mcu1.bin";
     char const *fpga_binary = "/cache/fpga.bin";
-//    char const *recovery_list = "/sdcard/recovery-list.txt";
+    char const *recovery_list = "/sdcard/recovery-list.txt";
     char *mcu_srec, *sta, *er;
     char const *tty_n = "/dev/ttyHSL1";
     char s_rec[64], resp[64], rev[32];
@@ -500,19 +502,20 @@ int main(int argc, char **argv)
 #endif
 
     printf("mcu update[%s]: Starting (pid %d) on %s\n", __func__, getpid(), ctime(&start));
-/*
-    err = wait_for_file(recovery_list, 4);
+
+    err = wait_for_file(recovery_list, 1);
     if (0 == err) {
         start = time(&start);
         printf("mcu update[%s]: recovery list exists %s\n", __func__, ctime(&start));
-        mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME);
+        fastboot_init();
+//        mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME);
 #if 0
         do {
             ;
         } while (1);
 #endif
     }
-*/
+
     err = wait_for_file("/sdcard/delta", 1);
     start = time(&start);
     if (0 == err) {
