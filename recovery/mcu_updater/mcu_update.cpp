@@ -24,6 +24,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <linux/input.h>
+//#include <linux/fs.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +32,7 @@
 #include <sys/klog.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/mount.h>
 #include <time.h>
 #include <unistd.h>
 #include <termio.h>
@@ -77,8 +79,8 @@ extern "C" {
 #define TTYHSL0_UPD_LOG "/dev/ttyHSL0"
 
 #undef REDIRECT_STDIO
-#define REDIRECT_STDIO MCU_UPD_LOG
-//#define REDIRECT_STDIO TTYHSL0_UPD_LOG
+//#define REDIRECT_STDIO MCU_UPD_LOG
+#define REDIRECT_STDIO TTYHSL0_UPD_LOG
 
 #if defined (REDIRECT_STDIO)
 static void redirect_stdio(const char* filename)
@@ -508,12 +510,34 @@ int main(int argc, char **argv)
         start = time(&start);
         printf("mcu update[%s]: recovery list exists %s\n", __func__, ctime(&start));
         fastboot_init();
-//        mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME);
-#if 0
-        do {
-            ;
-        } while (1);
-#endif
+        mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME, 0);
+
+        fi = fopen(recovery_list, "r");
+        if (fi) {
+            char *tok, *cmd = 0, *part = 0, *arg = 0;
+            while (fgets((char *)flash_page, sizeof(flash_page) - 1, fi)) {
+                flash_page[sizeof(flash_page) - 1] = 0;
+                if ('#' == flash_page[0]) {
+                    printf("mcu update[%s]: not a token %s\n", __func__, flash_page);
+                    continue;
+                }
+
+                tok = strtok((char *)flash_page, "\n");
+                cmd = tok = strtok(tok, " ");
+                if (tok) {
+                    part = strtok(0, " ");
+                    arg = strtok(0, " ");
+    			}
+
+                printf("mcu update[%s]: %s %s %s\n", __func__, (cmd)?cmd:"none", (part)?part:"none", (arg)?arg:"none");
+            }
+
+            fclose(fi); 
+
+            return 0;
+        }
+
+        printf("mcu update[%s]: %s doesn't exist %s\n", __func__, recovery_list, strerror(errno));
     }
 
     err = wait_for_file("/sdcard/delta", 1);
