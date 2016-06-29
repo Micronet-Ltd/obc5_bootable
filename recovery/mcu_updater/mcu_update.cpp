@@ -79,8 +79,8 @@ extern "C" {
 #define TTYHSL0_UPD_LOG "/dev/ttyHSL0"
 
 #undef REDIRECT_STDIO
-//#define REDIRECT_STDIO MCU_UPD_LOG
-#define REDIRECT_STDIO TTYHSL0_UPD_LOG
+#define REDIRECT_STDIO MCU_UPD_LOG
+//#define REDIRECT_STDIO TTYHSL0_UPD_LOG
 
 #if defined (REDIRECT_STDIO)
 static void redirect_stdio(const char* filename)
@@ -460,6 +460,7 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
         t_r = mktime(&tm_r);
         t_f = mktime(&tm_f);
         //if (difftime(t_f, t_r) < 0) {
+            printf("mcu update[%s]: fpga rev don't match %s <----- %s\n", __func__, rev, pb);
             return 1;
         //}
 #if 0
@@ -480,6 +481,7 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
 // TODO: set relevant timeouts values
 //
 int fastboot_init(void);
+void fastboot_command(char *cmd, char *part, char *arg);
 
 int main(int argc, char **argv)
 {
@@ -530,6 +532,7 @@ int main(int argc, char **argv)
     			}
 
                 printf("mcu update[%s]: %s %s %s\n", __func__, (cmd)?cmd:"none", (part)?part:"none", (arg)?arg:"none");
+                fastboot_command(cmd, part, arg);
             }
 
             fclose(fi); 
@@ -642,12 +645,9 @@ int main(int argc, char **argv)
             printf("mcu update[%s]: %s mcu spurious respons %s\n", __func__, tty_n, flash_page);
         }
         if (fpga_update) {
-            if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_FPGA_REV, strlen(MCU_UPD_FPGA_REV))) {
-                printf("mcu update[%s]: %s failure to transmit fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
-                break;
-            }
+            expect[0] = 0;
+            err = tx2mcu_cmd(fd_tty, (char *)MCU_UPD_FPGA_REV, rev, expect, strlen(MCU_UPD_FPGA_REV), 8, 4, MCU_UPD_RX_TO);
 
-            err = mcu2rx(fd_tty, rev, 28, MCU_UPD_RX_TO);
             if (0 == err) {
                 printf("mcu update[%s]: %s mcu support fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
                 rev[28] = 0;
@@ -664,11 +664,9 @@ int main(int argc, char **argv)
                         // tx start command
                         //
                         printf("mcu update[%s]: start update [%s]\n", __func__, s_rec);
-                        if (0 != tx2mcu(fd_tty, (uint8_t *)s_rec, strlen(s_rec)+1)) {
-                            printf("mcu update[%s]: %s failure to start FPGA update cmd %s\n", __func__, tty_n, strerror(errno));
-                            break;
-                        }
-                        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), MCU_UPD_RX_TO);
+                        expect[0] = (char *)MCU_UPD_OK;
+                        expect[1] = 0;
+                        err = tx2mcu_cmd(fd_tty, s_rec, resp, expect, strlen(s_rec) + 1, strlen(MCU_UPD_OK), 4, MCU_UPD_RX_TO);
                         if (0 != err) {
                             printf("mcu update[%s]: %s mcu don't respond on start FPGA update cmd %s\n", __func__, tty_n, strerror(errno));
                         } else {
