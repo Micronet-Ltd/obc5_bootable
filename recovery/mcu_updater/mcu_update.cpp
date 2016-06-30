@@ -230,7 +230,7 @@ static int pars_srec(char *s_rec, int len)
 
 static void num2hex(uint32_t n, char *hex)
 {
-    uint32_t mask = 0xF0000000, shift = 28;
+    uint32_t mask = 0xF0000000, shift = 28, d;
 
     if (!hex) {
         return;
@@ -238,7 +238,12 @@ static void num2hex(uint32_t n, char *hex)
 
     do {
         *hex++ = 0x30;
-        *hex++ = (n & mask)>>shift;
+		d = (n & mask)>>shift;
+		if (d < 0xA)
+			*hex = 0x30;
+		else
+			*hex = 'A' - 0xa;
+        *hex++ += d;
         mask >>= 4;
         shift -= 4;
     } while (mask);
@@ -430,25 +435,30 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
     rd = fread(b, 1, 82, f);
     b[rd-1] = 0;
     if (rd != 82) {
+        printf("mcu update[%s]: failure to read fpga binary[%s]\n", __func__, strerror(errno));
+        return 1;
+    }
+
+    pb = &b[2];
+    if (0 != strncmp(pb, "Lattice", 7)) {
+        printf("mcu update[%s]: fpga binary is invalid [%s]\n", __func__, b);
+        return 1;
+    }
+
+    pb += strlen(&b[2]) + 1;
+    pb += strlen(pb) + 1;
+    if (0 != strncmp(pb, "Part: iCE40HX4K-CB132", 21)) {
+        printf("mcu update[%s]: invalid header of fpga binary[%s]\n", __func__, &b[31]);
         return 0;
     }
 
-    if (0 != strncmp(&b[2], "Lattice", 7)) {
-        return 0;
-    }
-    if (0 != strncmp(&b[31], "Part: iCE40HX4K-CB132", 21)) {
-        return 0;
-    }
-
-    pb = strtok(b, "Date:");
-    if (!pb) {
+    pb += strlen(pb) + 1;
+    if (0 != strncmp(pb, "Date: ", 6)) {
+        printf("mcu update[%s]: invalid build date fpga binary\n", __func__);
         return 0;
     }
 
-    do {
-        if (*pb != ' ')
-            break;
-    } while (*pb++);
+    pb += 6;
 
     if (0 != *pb) {
         // Vladimir
@@ -576,12 +586,18 @@ int main(int argc, char **argv)
     err = wait_for_file(fpga_binary, 4); 
     start = time(&start);
     if (0 == err) {
-        err = stat(fpga_binary, &info);
+        chmod(fpga_binary, S_IRUSR | S_IRGRP | S_IROTH);
+        fd_tty = open(fpga_binary, O_RDONLY,  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        err = fstat(fd_tty, &info);
         if (0 == err) {
-            chmod(fpga_binary, S_IRUSR | S_IRGRP | S_IROTH);
-            printf("mcu update[%s]: FPGA update is present %s\n", __func__, ctime(&start));
+            printf("mcu update[%s]: FPGA update is present [%x, %d]\n", __func__, info.st_mode, (int)info.st_size);
             fpga_update = 1;
+        } else {
+            printf("mcu update[%s]: invalid FPGA update is present [%x, %d]\n", __func__, info.st_mode, (int)info.st_size);
+            info.st_size = 0;
         }
+        close(fd_tty);
+        fd_tty = 0;
     }
 
     printf("mcu update[%s]: got on %s\n", __func__, ctime(&start));
@@ -649,17 +665,18 @@ int main(int argc, char **argv)
             err = tx2mcu_cmd(fd_tty, (char *)MCU_UPD_FPGA_REV, rev, expect, strlen(MCU_UPD_FPGA_REV), 8, 4, MCU_UPD_RX_TO);
 
             if (0 == err) {
-                printf("mcu update[%s]: %s mcu support fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
+                printf("mcu update[%s]: %s mcu support fpga rev cmd\n", __func__, tty_n);
                 rev[28] = 0;
-                fi = fopen(fpga_binary, "r");
+                fi = fopen(fpga_binary, "r+b");
                 if (fi) {
                     if (fpga_need_for_update(fi, rev)) {
                         //  fseek(fi, 0, SEEK_SET);
                         rewind(fi);
 
                         num2hex(info.st_size, rev);
-                        rev[17] = 0;
-                        sprintf(s_rec, "%s%s", MCU_UPD_FPGA_STF, rev);
+                        rev[16] = 0;
+                        //printf("mcu update[%s]: %s file size %s\n", __func__, fpga_binary, rev);
+                        sprintf(s_rec, "%s%16s", MCU_UPD_FPGA_STF, rev);
 
                         // tx start command
                         //
@@ -748,6 +765,7 @@ int main(int argc, char **argv)
 
         expect[0] = (char *)MCU_UPD_AA;
         expect[1] = (char *)MCU_UPD_BB;
+        memset(resp, 0, 4);
         err = tx2mcu_cmd(fd_tty, (char *)MCU_UPD_RAB, resp, expect, strlen(MCU_UPD_RAB), 2, 4, MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on execution location cmd %s\n", __func__, tty_n, strerror(errno));
