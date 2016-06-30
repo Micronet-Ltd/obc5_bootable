@@ -24,6 +24,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <linux/input.h>
+//#include <linux/fs.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +32,7 @@
 #include <sys/klog.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/mount.h>
 #include <time.h>
 #include <unistd.h>
 #include <termio.h>
@@ -228,7 +230,7 @@ static int pars_srec(char *s_rec, int len)
 
 static void num2hex(uint32_t n, char *hex)
 {
-    uint32_t mask = 0xF0000000, shift = 28;
+    uint32_t mask = 0xF0000000, shift = 28, d;
 
     if (!hex) {
         return;
@@ -236,7 +238,12 @@ static void num2hex(uint32_t n, char *hex)
 
     do {
         *hex++ = 0x30;
-        *hex++ = (n & mask)>>shift;
+		d = (n & mask)>>shift;
+		if (d < 0xA)
+			*hex = 0x30;
+		else
+			*hex = 'A' - 0xa;
+        *hex++ += d;
         mask >>= 4;
         shift -= 4;
     } while (mask);
@@ -428,25 +435,30 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
     rd = fread(b, 1, 82, f);
     b[rd-1] = 0;
     if (rd != 82) {
+        printf("mcu update[%s]: failure to read fpga binary[%s]\n", __func__, strerror(errno));
+        return 1;
+    }
+
+    pb = &b[2];
+    if (0 != strncmp(pb, "Lattice", 7)) {
+        printf("mcu update[%s]: fpga binary is invalid [%s]\n", __func__, b);
+        return 1;
+    }
+
+    pb += strlen(&b[2]) + 1;
+    pb += strlen(pb) + 1;
+    if (0 != strncmp(pb, "Part: iCE40HX4K-CB132", 21)) {
+        printf("mcu update[%s]: invalid header of fpga binary[%s]\n", __func__, &b[31]);
         return 0;
     }
 
-    if (0 != strncmp(&b[2], "Lattice", 7)) {
-        return 0;
-    }
-    if (0 != strncmp(&b[31], "Part: iCE40HX4K-CB132", 21)) {
-        return 0;
-    }
-
-    pb = strtok(b, "Date:");
-    if (!pb) {
+    pb += strlen(pb) + 1;
+    if (0 != strncmp(pb, "Date: ", 6)) {
+        printf("mcu update[%s]: invalid build date fpga binary\n", __func__);
         return 0;
     }
 
-    do {
-        if (*pb != ' ')
-            break;
-    } while (*pb++);
+    pb += 6;
 
     if (0 != *pb) {
         // Vladimir
@@ -458,6 +470,7 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
         t_r = mktime(&tm_r);
         t_f = mktime(&tm_f);
         //if (difftime(t_f, t_r) < 0) {
+            printf("mcu update[%s]: fpga rev don't match %s <----- %s\n", __func__, rev, pb);
             return 1;
         //}
 #if 0
@@ -478,6 +491,7 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
 // TODO: set relevant timeouts values
 //
 int fastboot_init(void);
+void fastboot_command(char *cmd, char *part, char *arg);
 
 int main(int argc, char **argv)
 {
@@ -508,12 +522,35 @@ int main(int argc, char **argv)
         start = time(&start);
         printf("mcu update[%s]: recovery list exists %s\n", __func__, ctime(&start));
         fastboot_init();
-//        mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME);
-#if 0
-        do {
-            ;
-        } while (1);
-#endif
+        mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME, 0);
+
+        fi = fopen(recovery_list, "r");
+        if (fi) {
+            char *tok, *cmd = 0, *part = 0, *arg = 0;
+            while (fgets((char *)flash_page, sizeof(flash_page) - 1, fi)) {
+                flash_page[sizeof(flash_page) - 1] = 0;
+                if ('#' == flash_page[0]) {
+                    printf("mcu update[%s]: not a token %s\n", __func__, flash_page);
+                    continue;
+                }
+
+                tok = strtok((char *)flash_page, "\n");
+                cmd = tok = strtok(tok, " ");
+                if (tok) {
+                    part = strtok(0, " ");
+                    arg = strtok(0, " ");
+    			}
+
+                printf("mcu update[%s]: %s %s %s\n", __func__, (cmd)?cmd:"none", (part)?part:"none", (arg)?arg:"none");
+                fastboot_command(cmd, part, arg);
+            }
+
+            fclose(fi); 
+
+            return 0;
+        }
+
+        printf("mcu update[%s]: %s doesn't exist %s\n", __func__, recovery_list, strerror(errno));
     }
 
     err = wait_for_file("/sdcard/delta", 1);
@@ -549,12 +586,18 @@ int main(int argc, char **argv)
     err = wait_for_file(fpga_binary, 4); 
     start = time(&start);
     if (0 == err) {
-        err = stat(fpga_binary, &info);
+        chmod(fpga_binary, S_IRUSR | S_IRGRP | S_IROTH);
+        fd_tty = open(fpga_binary, O_RDONLY,  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        err = fstat(fd_tty, &info);
         if (0 == err) {
-            chmod(fpga_binary, S_IRUSR | S_IRGRP | S_IROTH);
-            printf("mcu update[%s]: FPGA update is present %s\n", __func__, ctime(&start));
+            printf("mcu update[%s]: FPGA update is present [%x, %d]\n", __func__, info.st_mode, (int)info.st_size);
             fpga_update = 1;
+        } else {
+            printf("mcu update[%s]: invalid FPGA update is present [%x, %d]\n", __func__, info.st_mode, (int)info.st_size);
+            info.st_size = 0;
         }
+        close(fd_tty);
+        fd_tty = 0;
     }
 
     printf("mcu update[%s]: got on %s\n", __func__, ctime(&start));
@@ -618,33 +661,29 @@ int main(int argc, char **argv)
             printf("mcu update[%s]: %s mcu spurious respons %s\n", __func__, tty_n, flash_page);
         }
         if (fpga_update) {
-            if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_FPGA_REV, strlen(MCU_UPD_FPGA_REV))) {
-                printf("mcu update[%s]: %s failure to transmit fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
-                break;
-            }
+            expect[0] = 0;
+            err = tx2mcu_cmd(fd_tty, (char *)MCU_UPD_FPGA_REV, rev, expect, strlen(MCU_UPD_FPGA_REV), 8, 4, MCU_UPD_RX_TO);
 
-            err = mcu2rx(fd_tty, rev, 28, MCU_UPD_RX_TO);
             if (0 == err) {
-                printf("mcu update[%s]: %s mcu support fpga rev cmd %s\n", __func__, tty_n, strerror(errno));
+                printf("mcu update[%s]: %s mcu support fpga rev cmd\n", __func__, tty_n);
                 rev[28] = 0;
-                fi = fopen(fpga_binary, "r");
+                fi = fopen(fpga_binary, "r+b");
                 if (fi) {
                     if (fpga_need_for_update(fi, rev)) {
                         //  fseek(fi, 0, SEEK_SET);
                         rewind(fi);
 
                         num2hex(info.st_size, rev);
-                        rev[17] = 0;
-                        sprintf(s_rec, "%s%s", MCU_UPD_FPGA_STF, rev);
+                        rev[16] = 0;
+                        //printf("mcu update[%s]: %s file size %s\n", __func__, fpga_binary, rev);
+                        sprintf(s_rec, "%s%16s", MCU_UPD_FPGA_STF, rev);
 
                         // tx start command
                         //
                         printf("mcu update[%s]: start update [%s]\n", __func__, s_rec);
-                        if (0 != tx2mcu(fd_tty, (uint8_t *)s_rec, strlen(s_rec)+1)) {
-                            printf("mcu update[%s]: %s failure to start FPGA update cmd %s\n", __func__, tty_n, strerror(errno));
-                            break;
-                        }
-                        err = mcu2rx(fd_tty, resp, strlen(MCU_UPD_OK), MCU_UPD_RX_TO);
+                        expect[0] = (char *)MCU_UPD_OK;
+                        expect[1] = 0;
+                        err = tx2mcu_cmd(fd_tty, s_rec, resp, expect, strlen(s_rec) + 1, strlen(MCU_UPD_OK), 4, MCU_UPD_RX_TO);
                         if (0 != err) {
                             printf("mcu update[%s]: %s mcu don't respond on start FPGA update cmd %s\n", __func__, tty_n, strerror(errno));
                         } else {
@@ -726,6 +765,7 @@ int main(int argc, char **argv)
 
         expect[0] = (char *)MCU_UPD_AA;
         expect[1] = (char *)MCU_UPD_BB;
+        memset(resp, 0, 4);
         err = tx2mcu_cmd(fd_tty, (char *)MCU_UPD_RAB, resp, expect, strlen(MCU_UPD_RAB), 2, 4, MCU_UPD_RX_TO);
         if (0 != err) {
             printf("mcu update[%s]: %s mcu don't respond on execution location cmd %s\n", __func__, tty_n, strerror(errno));

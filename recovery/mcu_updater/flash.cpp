@@ -43,8 +43,9 @@
 //#include <unistd.h>
 //#include <sys/reboot.h>
 //#include <sys/ioctl.h>
+#include <sys/mount.h>
 
-//#include "bootimg.h"
+#include "bootimg.h"
 //#include "commands/boot.h"
 #include "flash.h"
 #include "partitions.h"
@@ -197,6 +198,12 @@ static void cmd_erase(int src_fd, const char *arg)
         return;
     }
 
+    printf("%s: unmount %s\n", __func__, arg);
+    if (!(0 == umount(arg) || errno == EINVAL || errno == ENOENT)) {
+        printf("%s: failure unmount %s[%s]\n", __func__, arg, strerror(errno));
+        return;
+    }
+
     partition_fd = flash_get_partiton(path);
     if (partition_fd < 0) {
         printf("%s: partiton file does not exists\n", __func__);
@@ -216,8 +223,7 @@ static void cmd_erase(int src_fd, const char *arg)
     printf("%s: Done\n", __func__);
 }
 
-#if 0
-static void cmd_flash(struct protocol_handle *phandle, const char *arg)
+static void cmd_flash(int src_fd, const char *arg)
 {
     int partition;
     uint64_t sz;
@@ -228,6 +234,7 @@ static void cmd_flash(struct protocol_handle *phandle, const char *arg)
 
     printf("%s: cmd_flash %s\n", __func__, arg);
 
+#if 0
     if (try_handle_virtual_partition(phandle, arg)) {
         return;
     }
@@ -284,8 +291,8 @@ static void cmd_flash(struct protocol_handle *phandle, const char *arg)
     close(data_fd);
 
     fastboot_okay(phandle, "");
-}
 #endif
+}
 
 extern void fastboot_register(const char *prefix, void (* handler)(int src_fd, const char *arg));
 
@@ -294,6 +301,6 @@ void commands_init(void)
     virtual_partition_register("partition-table", cmd_gpt_layout);
 
     fastboot_register("erase:", cmd_erase);
-//    fastboot_register("flash:", cmd_flash);
+    fastboot_register("flash:", cmd_flash);
 }
 
