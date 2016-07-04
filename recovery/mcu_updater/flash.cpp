@@ -185,7 +185,7 @@ int flash_write(int partition_fd, int data_fd, ssize_t size, ssize_t skip)
     return 0;
 }
 
-static void cmd_erase(int src_fd, const char *arg)
+static void cmd_erase(void *data, int64_t len, const char *arg)
 {
     int partition_fd;
     char path[PATH_MAX];
@@ -223,7 +223,7 @@ static void cmd_erase(int src_fd, const char *arg)
     printf("%s: Done\n", __func__);
 }
 
-static void cmd_flash(int src_fd, const char *arg)
+static void cmd_flash(void *pdata, int64_t len, const char *arg)
 {
     int partition;
     uint64_t sz;
@@ -232,7 +232,7 @@ static void cmd_flash(int src_fd, const char *arg)
     ssize_t header_sz = 0;
     int data_fd = 0;
 
-    printf("%s: cmd_flash %s\n", __func__, arg);
+    printf("%s: %s [%x, %x]\n", __func__, arg, pdata, len);
 
 #if 0
     if (try_handle_virtual_partition(phandle, arg)) {
@@ -294,7 +294,7 @@ static void cmd_flash(int src_fd, const char *arg)
 #endif
 }
 
-extern void fastboot_register(const char *prefix, void (* handler)(int src_fd, const char *arg));
+extern void fastboot_register(const char *prefix, void (* handler)(void *data, int64_t len, const char *arg));
 
 void commands_init(void)
 {
