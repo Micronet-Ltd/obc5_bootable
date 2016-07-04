@@ -58,6 +58,8 @@ extern "C" {
 #define MCU_UPD_FPGA_REV         "FRE"
 #define MCU_UPD_FPGA_STF         "STF"
 #define MCU_UPD_FPGA_nCRC        "nCRC"
+#define MCU_UPD_SFD              "SFD"
+#define MCU_UPD_RST              "RST"
 
 #define MCU_UPD_REV     "REV"
 #define MCU_UPD_STA     "STA"
@@ -687,7 +689,9 @@ int main(int argc, char **argv)
                         if (0 != err) {
                             printf("mcu update[%s]: %s mcu don't respond on start FPGA update cmd %s\n", __func__, tty_n, strerror(errno));
                         } else {
+                            int page = 0;
                             do {
+                                page++;
                                 i = fread(flash_page, 1, MCU_UPD_SPI_FLASH_PAGE_L, fi); 
                                 if (i) {
                                     uint32_t crc;
@@ -705,6 +709,8 @@ int main(int argc, char **argv)
                                     flash_page[i+3] = (crc >> 24) & 0xFF;
                                     do {
                                         //err = tx2mcu(fd_tty, flash_page, sizeof(flash_page));
+                                        start = time(&start);
+                                        //printf("mcu update[%s]: transmit page %d %s\n", __func__, page, ctime(&start));
                                         err = tx2mcu(fd_tty, flash_page, i+4);
                                         if (0 != err) {
                                             printf("mcu update[%s]: %s failure to tx flash page %s\n", __func__, tty_n, strerror(errno));
@@ -712,12 +718,13 @@ int main(int argc, char **argv)
                                         }
                                         memset(resp, 0, strlen(MCU_UPD_nRDY));
                                         err = mcu2srec_rx(fd_tty, resp, strlen(MCU_UPD_nRDY), MCU_UPD_RX_TO);
+                                        start = time(&start);
                                         if (err < 0) {
-                                            printf("mcu update[%s]: mcu don't respond on tx flash page %s\n", __func__, s_rec);
+                                            printf("mcu update[%s]: mcu don't respond on tx flash page[%d] %s\n", __func__, page, ctime(&start));
                                         } else if (1 == err) {
-                                            printf("mcu update[%s]: mcu not ready\n", __func__);
+                                            printf("mcu update[%s]: mcu not ready %s\n", __func__, ctime(&start));
                                         } else if (2 == err) {
-                                            printf("mcu update[%s]: CRC error\n", __func__);
+                                            printf("mcu update[%s]: CRC error %s\n", __func__, ctime(&start));
                                         }
                                     } while (1 == err || 2 == err);
 
@@ -727,9 +734,16 @@ int main(int argc, char **argv)
                                 }
                             } while (i == MCU_UPD_SPI_FLASH_PAGE_L);
 
-                            printf("mcu update[%s]: signal about update done\n", __func__);
-                            if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
-                                printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
+                            start = time(&start);
+                            usleep(100*1000);
+                            if (0 == err) {
+                                printf("mcu update[%s]: signal about update done %s\n", __func__, ctime(&start));
+                                if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_SFD, strlen(MCU_UPD_SFD))) {
+                                    printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
+                                }
+                            } else {
+                                printf("mcu update[%s]: failure to tx page %d %s\n", __func__, page, ctime(&start));
+                                //tx2mcu(fd_tty, (uint8_t *)MCU_UPD_RST, strlen(MCU_UPD_RST);
                             }
                         }
                     }
