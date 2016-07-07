@@ -45,15 +45,16 @@ uint64_t get_file_size64(int fd);
 uint64_t get_file_size(int fd);
 uint64_t get_block_device_size(int fd);
 int wipe_block_device(int fd, int64_t len);
-int create_temp_file();
 ssize_t bulk_read(int bulk_out, char *buf, size_t length);
 ssize_t bulk_write(int bulk_in, const char *buf, size_t length);
-int service_start(const char *service_name);
-int service_stop(const char *service_name);
-int ssh_server_start();
 
+#define CACHE_LINE 64
 #define ROUND_TO_PAGE(address,pagesize) ((address + pagesize - 1) & (~(pagesize - 1)))
-
 #define ROUND_UP(number,size) (((number + size - 1) / size) * size)
+//#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+//#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+//#define ROUNDUP(a, b) (((a) + ((b)-1)) & ~((b)-1))
+//#define ROUNDDOWN(a, b) ((a) & ~((b)-1))
 
 #endif

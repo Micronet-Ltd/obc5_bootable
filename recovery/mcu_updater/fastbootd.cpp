@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <cutils/klog.h>
-#include "../../system/core/libsparse/include/sparse/sparse.h"
+//#include "../../system/core/libsparse/include/sparse/sparse.h"
 
 
 #include "utils.h"
@@ -36,12 +36,12 @@ struct fastboot_cmd {
     struct fastboot_cmd *next;
     const char *prefix;
     unsigned prefix_len;
-    void (* handler)(void *data, int64_t len, const char *arg);
+    void (* handler)(int src_fd, void *data, int64_t len, const char *arg);
 };
 
 static struct fastboot_cmd *cmdlist;
 
-void fastboot_register(const char *prefix, void (* handler)(void *data, int64_t len, const char *arg))
+void fastboot_register(const char *prefix, void (* handler)(int src_fd, void *data, int64_t len, const char *arg))
 {
     struct fastboot_cmd *cmd;
     cmd = (struct fastboot_cmd *)malloc(sizeof(*cmd));
@@ -95,6 +95,7 @@ static void *load_fd(int fd, unsigned *_sz)
     return data;
 }
 
+#if 0
 static struct sparse_file **load_sparse_files(int fd, int max_size)
 {
     struct sparse_file *s;
@@ -123,6 +124,29 @@ static struct sparse_file **load_sparse_files(int fd, int max_size)
 
     return out_s;
 }
+#endif
+
+static void *load_limit_fd(int fd, int64_t *max_size)
+{
+    char *data;
+    int err;
+
+    data = 0;
+
+    data = (char *)malloc(*max_size);
+    if(!data) {
+        return 0;
+    }
+
+    err = read(fd, data, *max_size);
+
+    if(err != *max_size) {
+        free(data);
+        return 0;
+    }
+
+    return data;
+}
 
 static int load_buf_fd(int fd, struct fastboot_buffer *buf)
 {
@@ -137,12 +161,20 @@ static int load_buf_fd(int fd, struct fastboot_buffer *buf)
 
     lseek(fd, 0, SEEK_SET);
     if (limit < sz64) {
+#if 0
         struct sparse_file **s = load_sparse_files(fd, limit);
         if (s == NULL) {
             return -1;
         }
         buf->type = FB_BUFFER_SPARSE;
         buf->data = s;
+#endif
+        data = load_limit_fd(fd, &limit);
+        if (!data)
+            return -1;
+        buf->type = FB_BUFFER_SPARSE;
+        buf->data = data;
+        buf->sz = sz64;
     } else {
         unsigned int sz;
         data = load_fd(fd, &sz);
@@ -156,20 +188,22 @@ static int load_buf_fd(int fd, struct fastboot_buffer *buf)
     return 0;
 }
 
-static void flash_buf(const char *part, fastboot_cmd *fb_cmd, struct fastboot_buffer *buf)
+static void flash_buf(int src_fd, const char *part, fastboot_cmd *fb_cmd, struct fastboot_buffer *buf)
 {
     struct sparse_file **s;
 
     switch (buf->type) {
         case FB_BUFFER_SPARSE:
+#if 0
             s = (sparse_file **)buf->data;
             while (*s) {
                 int64_t sz64 = sparse_file_len(*s, true, false); // ?
-                fb_cmd->handler(*s++, sz64, part);
+                fb_cmd->handler(src_fd, *s++, sz64, part);
             }
             break;
-    case FB_BUFFER:
-            fb_cmd->handler(buf->data, buf->sz, part);
+#endif
+        case FB_BUFFER:
+            fb_cmd->handler(src_fd, buf->data, buf->sz, part);
             break;
         default:
             D(ERR,"unknown buffer type: %d", buf->type);
@@ -184,8 +218,11 @@ void fastboot_load_file(int src_fd, const char *part, fastboot_cmd *fb_cmd)
     err = load_buf_fd(src_fd, &buf);
 
     if (!err) {
-        flash_buf(part, fb_cmd, &buf);
-        free(buf.data); 
+        flash_buf(src_fd, part, fb_cmd, &buf);
+        free(buf.data);
+
+        //mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", MS_NOATIME | MS_NODEV | MS_NODIRATIME, 0);
+
     } else {
         D(INFO,"failure to load dat for %s\n", part);
     }
@@ -196,23 +233,23 @@ void fastboot_command(char *cmd, char *part, char *arg)
     int src_fd;
     struct fastboot_cmd *fb_cmd;
 
-    D(INFO,"%s %s %s\n", cmd, part, arg);
+//    D(INFO,"%s %s %s\n", cmd, part, arg);
 
     for (fb_cmd = cmdlist; fb_cmd; fb_cmd = fb_cmd->next) {
         if (memcmp(cmd, fb_cmd->prefix, fb_cmd->prefix_len)) {
-            D(INFO,"mismatch %s %s", cmd, fb_cmd->prefix);
+            //D(INFO,"mismatch %s %s", cmd, fb_cmd->prefix);
             continue;
         }
 
-        D(INFO,"match found %s %s", cmd, fb_cmd->prefix);
+        //D(INFO,"match found %s %s", cmd, fb_cmd->prefix);
         if (arg) {
-            src_fd = open(arg, O_RDONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); 
+            src_fd = open(arg, O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         } else {
             src_fd = -1;
         }
 
         if (src_fd < 0) {
-            fb_cmd->handler(0, 0, part);
+            fb_cmd->handler(0, 0, 0, part);
         } else {
             fastboot_load_file(src_fd, part, fb_cmd);
         }
@@ -220,7 +257,7 @@ void fastboot_command(char *cmd, char *part, char *arg)
         if (src_fd) {
             close(src_fd);
         }
-        D(INFO,"%s done\n", fb_cmd->prefix);
+//        D(INFO,"%s done\n", fb_cmd->prefix);
         return; 
     }
 }
