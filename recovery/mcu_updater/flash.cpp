@@ -238,7 +238,7 @@ static void cmd_erase(int src_fd, void *data, int64_t len, const char *arg)
         return;
     }
 
-    if (1) {
+    if (0) {
         int dbg_fd;
         int part_fd = flash_get_partiton(path);
         int64_t part_len = get_file_size64(part_fd);
@@ -272,8 +272,8 @@ static void cmd_erase(int src_fd, void *data, int64_t len, const char *arg)
 
 static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
 {
-    int64_t part_len, header_sz = 0;
-    int i, part_fd, map_fd, unsparse_fd = -1;
+    int64_t part_len;
+    int i, part_fd;
     uint32_t total_blocks = 0, chunk, chunk_sz, chunk_blk_cnt, fill_val, *fill_buf = 0, *rd_buf;
     sparse_header_t *sparse_header;
     chunk_header_t chunk_header;
@@ -296,7 +296,7 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
         return;
     }
 
-    printf("%s: %s found\n", __func__, path);
+//    printf("%s: %s found\n", __func__, path);
 
     // TODO: Maybe its goot idea to check whether the partition is bootable
     if (!strcmp(arg, "boot") || !strcmp(arg, "recovery")) {
@@ -309,14 +309,14 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
     part_fd = flash_get_partiton(path);
     part_len = get_file_size64(part_fd);
 
-    if (part_len < len - header_sz) {
+    if (part_len < len) {
         flash_close(part_fd);
         printf("%s: the file is too large\n", __func__);
         return;
     }
 
-    lseek(src_fd, 0, SEEK_SET);
-    map_fd = src_fd;
+    lseek64(src_fd, 0, SEEK_SET);
+
     // Read and skip over sparse image header
     sparse_header = (sparse_header_t *)pdata;
     if (sparse_header->magic == SPARSE_HEADER_MAGIC) {
@@ -327,12 +327,13 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
             printf("%s: the sparse-file is too large\n", __func__);
             return;
         }
-        lseek(src_fd, sparse_header->file_hdr_sz, SEEK_CUR);
+        lseek64(src_fd, (uint64_t)sparse_header->file_hdr_sz, SEEK_CUR);
         if (sizeof(sparse_header_t) < sparse_header->file_hdr_sz) {
             /* Skip the remaining bytes in a header that is longer than
              * we expected.
              */
-            lseek(src_fd, sparse_header->file_hdr_sz - sizeof(sparse_header_t), SEEK_CUR);
+            printf("%s: %d: seek src %d bytes\n", __func__, __LINE__, sparse_header->file_hdr_sz - (uint16_t)sizeof(sparse_header_t));
+            lseek64(src_fd, (uint64_t)sparse_header->file_hdr_sz - sizeof(sparse_header_t), SEEK_CUR);
         }
         printf ("%s: === Sparse Image Header ===\n", __func__);
         printf ("%s:     magic: 0x%x\n", __func__, sparse_header->magic);
@@ -344,38 +345,31 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
         printf ("%s:     total_blks: %d\n", __func__, sparse_header->total_blks);
         printf ("%s:     total_chunks: %d\n", __func__, sparse_header->total_chunks);
 
-        unsparse_fd = open("/sdcard/unsparse.img", O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (unsparse_fd < 0) {
-            printf("%s: %d failure open un-sparse file [%s]\n", __func__, __LINE__, strerror(errno));
-            flash_close(part_fd);
-            return;
-        }
         for (chunk = 0; chunk < sparse_header->total_chunks; chunk++) {
             /* Make sure the total image size does not exceed the partition size */
             if(((int64_t)total_blocks * (int64_t)sparse_header->blk_sz) >= part_len) {
                 printf("%s: too more blocks\n", __func__);
                 flash_close(part_fd);
-                close(unsparse_fd);
                 return;
             }
             /* Read and skip over chunk header */
             if (sizeof(chunk_header_t) != read(src_fd, &chunk_header, sizeof(chunk_header_t))) {
                 printf("%s: %d: failure to read src\n", __func__, __LINE__);
                 flash_close(part_fd);
-                close(unsparse_fd);
                 return;
             }
 
-            printf("%s: === Chunk Header ===\n", __func__);
-            printf("%s:     chunk_type: 0x%x\n", __func__, chunk_header.chunk_type);
-            printf("%s:     chunk_data_sz: 0x%x\n", __func__, chunk_header.chunk_sz);
-            printf("%s:     total_size: 0x%x\n", __func__, chunk_header.total_sz);
+//            printf("%s: === Chunk Header ===\n", __func__);
+//            printf("%s:     chunk_type: 0x%x\n", __func__, chunk_header.chunk_type);
+//            printf("%s:     chunk_data_sz: %d\n", __func__, chunk_header.chunk_sz);
+//            printf("%s:     total_size: %d\n", __func__, chunk_header.total_sz);
 
             if(sparse_header->chunk_hdr_sz > sizeof(chunk_header_t)) {
                 /* Skip the remaining bytes in a header that is longer than
                  * we expected.
                  */
-                lseek(src_fd, sparse_header->chunk_hdr_sz - sizeof(chunk_header_t), SEEK_CUR);
+                printf("%s: %d: seek src %d bytes\n", __func__, __LINE__, sparse_header->chunk_hdr_sz - (uint16_t)sizeof(chunk_header_t));
+                lseek64(src_fd, (uint64_t)sparse_header->chunk_hdr_sz - sizeof(chunk_header_t), SEEK_CUR);
             }
 
             chunk_sz = sparse_header->blk_sz * chunk_header.chunk_sz;
@@ -384,7 +378,6 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
             if (sparse_header->blk_sz && (chunk_header.chunk_sz != chunk_sz / sparse_header->blk_sz)) {
                 printf("%s: invalid chunk header\n", __func__);
                 flash_close(part_fd);
-                close(unsparse_fd);
                 return;
             }
 
@@ -394,7 +387,6 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
             if ((int64_t)total_blocks * (int64_t)sparse_header->blk_sz + chunk_sz > part_len) {
                 printf("%s: too large chunk\n", __func__);
                 flash_close(part_fd);
-                close(unsparse_fd);
                 return;
             }
 
@@ -403,46 +395,32 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
                     if(chunk_header.total_sz != (sparse_header->chunk_hdr_sz + chunk_sz)) {
                         printf("%s: invalid raw chunk header\n", __func__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
 
                     if (chunk_sz != read(src_fd, rd_buf, chunk_sz)) {
                         printf("%s: %d: failure to read src\n", __func__, __LINE__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
-//                    if(write(unsparse_fd, ptn + ((uint64_t)total_blocks*sparse_header->blk_sz),
-//                                chunk_data_sz,
-//                                (unsigned int*)data))
-                    lseek(part_fd, total_blocks*sparse_header->blk_sz, SEEK_SET);
+//                    printf("%s: %d: write raw [%d: %ld:%d]\n", __func__, __LINE__, chunk, (int64_t)total_blocks*sparse_header->blk_sz, chunk_sz);
+                    lseek64(part_fd, (uint64_t)total_blocks*sparse_header->blk_sz, SEEK_SET);
                     if (chunk_sz != write(part_fd, rd_buf, chunk_sz)) {
                         printf("%s: %d: failure to write partition\n", __func__, __LINE__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
-                        return;
-                    }
-                    if (chunk_sz != write(unsparse_fd, rd_buf, chunk_sz)) {
-                        printf("%s: %d: failure to write dst\n", __func__, __LINE__);
-                        flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
                     if (total_blocks > (UINT_MAX - chunk_header.chunk_sz)) {
                         printf("%s: invalid raw chunk size\n", __func__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
                     total_blocks += chunk_header.chunk_sz;
-//                    data += chunk_data_sz;
                     break;
                 case CHUNK_TYPE_FILL:
                     if (chunk_header.total_sz != (sparse_header->chunk_hdr_sz + sizeof(uint32_t))) {
                         printf("%s: invalid fill chunk size\n", __func__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
 
@@ -450,15 +428,13 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
                     if (!fill_buf) {
                         printf("%s: not enough memory for fill chunk\n", __func__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
 
                     if (sizeof(uint32_t) != read(src_fd, rd_buf, sizeof(uint32_t))) {
                         printf("%s: %d: failure to read src\n", __func__, __LINE__);
-                        free(fill_buf);
                         flash_close(part_fd);
-                        close(unsparse_fd);
+                        free(fill_buf);
                         return;
                     }
 
@@ -474,24 +450,17 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
                         /* Make sure that the data written to partition does not exceed partition size */
                         if ((int64_t)total_blocks * (int64_t)sparse_header->blk_sz + sparse_header->blk_sz > part_len) {
                             printf("%s: %d: fill chunk size exceeds partition size\n", __func__, __LINE__);
-                            free(fill_buf);
                             flash_close(part_fd);
-                            close(unsparse_fd);
+                            free(fill_buf);
                             return;
                         }
 
-                        lseek(part_fd, total_blocks*sparse_header->blk_sz, SEEK_SET);
-                        if (chunk_sz != write(part_fd, fill_buf, sparse_header->blk_sz)) {
+//                        printf("%s: %d: write fill [%d: %d:%d]\n", __func__, __LINE__, chunk, total_blocks*sparse_header->blk_sz, sparse_header->blk_sz);
+                        lseek64(part_fd, (uint64_t)total_blocks*sparse_header->blk_sz, SEEK_SET);
+                        if (sparse_header->blk_sz != write(part_fd, fill_buf, sparse_header->blk_sz)) {
                             printf("%s: %d: failure to write partition\n", __func__, __LINE__);
                             flash_close(part_fd);
-                            close(unsparse_fd);
-                            return;
-                        }
-                        if (sparse_header->blk_sz != write(unsparse_fd, fill_buf, sparse_header->blk_sz)) {
-                            printf("%s: %d: failure to write dst\n", __func__, __LINE__);
                             free(fill_buf);
-                            flash_close(part_fd);
-                            close(unsparse_fd);
                             return;
                         }
 
@@ -501,10 +470,10 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
                     free(fill_buf);
                     break;
                 case CHUNK_TYPE_DONT_CARE:
+//                    printf("%s: %d: skip don't care [%d:%d] blocks\n", __func__, __LINE__, chunk, chunk_header.chunk_sz);
                     if (total_blocks > (UINT_MAX - chunk_header.chunk_sz)) {
                         printf("%s: invalid don't care chunk size\n", __func__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
                     total_blocks += chunk_header.chunk_sz;
@@ -513,28 +482,23 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
                     if (chunk_header.total_sz != sparse_header->chunk_hdr_sz) {
                         printf("%s: invalid crc chunk\n", __func__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
                     if (total_blocks > (UINT_MAX - chunk_header.chunk_sz)) {
                         printf("%s: invalid crc chunk size\n", __func__);
                         flash_close(part_fd);
-                        close(unsparse_fd);
                         return;
                     }
+//                    printf("%s: %d: skip CRC32 [%d:%d] blocks\n", __func__, __LINE__, chunk, chunk_header.chunk_sz);
                     total_blocks += chunk_header.chunk_sz;
-//                    data += chunk_data_sz;
-                    lseek(src_fd, chunk_sz, SEEK_CUR);
+                    lseek64(src_fd, (uint64_t)chunk_sz, SEEK_CUR);
                     break;
                 default:
                     printf("%s: Unkown chunk: %x\n",__func__, chunk_header.chunk_type);
                     flash_close(part_fd);
-                    close(unsparse_fd);
                     return;
             }
         }
-        sync();
-        close(unsparse_fd);
 
         printf("%s: Un-sparse summary: %u blocks of %u expected\n",__func__, total_blocks, sparse_header->total_blks);
 
@@ -545,32 +509,21 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
         }
 
         printf("%s: un-sparse image done\n", __func__);
-        unsparse_fd = -1;
-//        map_fd = unsparse_fd = open("/sdcard/unsparse.img", O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-//        if (map_fd < 0) {
-//            printf("%s: %d failure open un-sparse file [%s]\n", __func__, __LINE__, strerror(errno));
-//            flash_close(part_fd);
-//            return;
-//        }
-//        len = get_file_size(map_fd);
     } else {
-        printf("%s: writing %"PRId64" bytes to '%s'\n", __func__, len - header_sz, arg);
+        printf("%s: writing %"PRId64" bytes to '%s'\n", __func__, len, arg);
 
-        if (flash_write(part_fd, map_fd, len - header_sz, header_sz)) {
+        if (flash_write(part_fd, src_fd, len, 0)) {
             printf("%s: flash write failure\n", __func__);
             flash_close(part_fd);
             return;
         }
-
-        sync();
-        flash_close(part_fd);
-    }
-    if (-1 != unsparse_fd) {
-        close(unsparse_fd);
     }
 
+    sync();
+    flash_close(part_fd);
 
-    if (1) {
+
+    if (0) {
         int dbg_fd = open("/sdcard/dump.img", O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         part_fd = flash_get_partiton(path);
         part_len = get_file_size64(part_fd);
