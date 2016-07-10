@@ -125,7 +125,7 @@ struct block_device {
 struct block_device avail_block_devices[] = {
     {"/system", "/dev/block/bootdevice/by-name/system", "ext4", "/system"},
     {"/cache", "/dev/block/bootdevice/by-name/cache", "ext4", "/cache"},
-    {"/data", "/dev/block/bootdevice/by-name/userdata", "ext4", "/data"},
+    {"/userdata", "/dev/block/bootdevice/by-name/userdata", "ext4", "/data"},
     {"/boot", "/dev/block/bootdevice/by-name/boot", "emmc", 0},
     {"/recovery", "/dev/block/bootdevice/by-name/recovery", "emmc", 0},
     {"/misc", "/dev/block/bootdevice/by-name/misc", "raw", 0},
@@ -202,6 +202,23 @@ int flash_write(int partition_fd, int data_fd, ssize_t size, ssize_t skip)
     return 0;
 }
 
+int flash_dump(int partition_fd, int data_fd, ssize_t part_len)
+{
+    ssize_t rd = 0;
+    ssize_t total = 0;
+    uint8_t buff[BUFFER_SIZE];
+
+    while (total < part_len) {
+        int len = MIN(part_len - total, BUFFER_SIZE);
+
+        rd = read(partition_fd, buff, len);
+        write(data_fd, buff, rd);
+        total += rd;
+    }
+
+    return 0;
+}
+
 static void cmd_erase(int src_fd, void *data, int64_t len, const char *arg)
 {
     int partition_fd;
@@ -219,6 +236,19 @@ static void cmd_erase(int src_fd, void *data, int64_t len, const char *arg)
     if (!(0 == umount(arg) || errno == EINVAL || errno == ENOENT)) {
         printf("%s: failure unmount %s[%s]\n", __func__, arg, strerror(errno));
         return;
+    }
+
+    if (1) {
+        int dbg_fd;
+        int part_fd = flash_get_partiton(path);
+        int64_t part_len = get_file_size64(part_fd);
+
+        dbg_fd = open("/sdcard/prev-dump.img", O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        flash_dump(part_fd, dbg_fd, part_len);
+        sync();
+
+        close(dbg_fd);
+        flash_close(part_fd);
     }
 
     partition_fd = flash_get_partiton(path);
@@ -517,7 +547,27 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
         return;
     }
 
+    sync();
     flash_close(part_fd);
+    if (-1 != unsparse_fd) {
+        close(unsparse_fd);
+    }
+
+
+    if (1) {
+        int dbg_fd = open("/sdcard/dump.img", O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        part_fd = flash_get_partiton(path);
+        part_len = get_file_size64(part_fd);
+
+        printf("%s: dump %s of %"PRId64" lenth\n", __func__, arg, part_len);
+
+        flash_dump(part_fd, dbg_fd, part_len);
+        sync();
+
+        close(dbg_fd);
+        flash_close(part_fd);
+    }
+
     flash_mount(arg);
 
     printf("%s: '%s' updated\n", __func__, arg);
