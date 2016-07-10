@@ -416,6 +416,13 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
 //                    if(write(unsparse_fd, ptn + ((uint64_t)total_blocks*sparse_header->blk_sz),
 //                                chunk_data_sz,
 //                                (unsigned int*)data))
+                    lseek(part_fd, total_blocks*sparse_header->blk_sz, SEEK_SET);
+                    if (chunk_sz != write(part_fd, rd_buf, chunk_sz)) {
+                        printf("%s: %d: failure to write partition\n", __func__, __LINE__);
+                        flash_close(part_fd);
+                        close(unsparse_fd);
+                        return;
+                    }
                     if (chunk_sz != write(unsparse_fd, rd_buf, chunk_sz)) {
                         printf("%s: %d: failure to write dst\n", __func__, __LINE__);
                         flash_close(part_fd);
@@ -473,6 +480,13 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
                             return;
                         }
 
+                        lseek(part_fd, total_blocks*sparse_header->blk_sz, SEEK_SET);
+                        if (chunk_sz != write(part_fd, fill_buf, sparse_header->blk_sz)) {
+                            printf("%s: %d: failure to write partition\n", __func__, __LINE__);
+                            flash_close(part_fd);
+                            close(unsparse_fd);
+                            return;
+                        }
                         if (sparse_header->blk_sz != write(unsparse_fd, fill_buf, sparse_header->blk_sz)) {
                             printf("%s: %d: failure to write dst\n", __func__, __LINE__);
                             free(fill_buf);
@@ -531,24 +545,26 @@ static void cmd_flash(int src_fd, void *pdata, int64_t len, const char *arg)
         }
 
         printf("%s: un-sparse image done\n", __func__);
-        map_fd = unsparse_fd = open("/sdcard/unsparse.img", O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (map_fd < 0) {
-            printf("%s: %d failure open un-sparse file [%s]\n", __func__, __LINE__, strerror(errno));
+        unsparse_fd = -1;
+//        map_fd = unsparse_fd = open("/sdcard/unsparse.img", O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+//        if (map_fd < 0) {
+//            printf("%s: %d failure open un-sparse file [%s]\n", __func__, __LINE__, strerror(errno));
+//            flash_close(part_fd);
+//            return;
+//        }
+//        len = get_file_size(map_fd);
+    } else {
+        printf("%s: writing %"PRId64" bytes to '%s'\n", __func__, len - header_sz, arg);
+
+        if (flash_write(part_fd, map_fd, len - header_sz, header_sz)) {
+            printf("%s: flash write failure\n", __func__);
             flash_close(part_fd);
             return;
         }
-        len = get_file_size(map_fd);
-    }
-    printf("%s: writing %"PRId64" bytes to '%s'\n", __func__, len - header_sz, arg);
 
-    if (flash_write(part_fd, map_fd, len - header_sz, header_sz)) {
-        printf("%s: flash write failure\n", __func__);
+        sync();
         flash_close(part_fd);
-        return;
     }
-
-    sync();
-    flash_close(part_fd);
     if (-1 != unsparse_fd) {
         close(unsparse_fd);
     }
