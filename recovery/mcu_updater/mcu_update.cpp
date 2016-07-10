@@ -81,8 +81,8 @@ extern "C" {
 #define TTYHSL0_UPD_LOG "/dev/ttyHSL0"
 
 #undef REDIRECT_STDIO
-#define REDIRECT_STDIO MCU_UPD_LOG
-//#define REDIRECT_STDIO TTYHSL0_UPD_LOG
+//#define REDIRECT_STDIO MCU_UPD_LOG
+#define REDIRECT_STDIO TTYHSL0_UPD_LOG
 
 #if defined (REDIRECT_STDIO)
 static void redirect_stdio(const char* filename)
