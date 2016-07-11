@@ -137,7 +137,7 @@ int flash_mount(const char *part)
 {
     int i;
 
-    for (i = 0; i < sizeof(avail_block_devices)/sizeof(avail_block_devices[0]); i++) {
+    for (i = 0; i < (int)sizeof(avail_block_devices)/(int)sizeof(avail_block_devices[0]); i++) {
         if (avail_block_devices[i].mount_point && 0 == strcmp(part, avail_block_devices[i].part_name)) {
             mount(avail_block_devices[i].blk_dev_name, avail_block_devices[i].mount_point, avail_block_devices[i].fs_type,
                   MS_NOATIME | MS_NODEV | MS_NODIRATIME, 0);
@@ -168,7 +168,7 @@ int flash_erase(int fd)
 {
     int64_t size;
     size = get_block_device_size(fd);
-//    D(DEBUG, "erase %"PRId64" data from %d\n", size, fd);
+    D(DEBUG, "erase %"PRId64" data from %d\n", size, fd);
 
     return wipe_block_device(fd, size);
 }
