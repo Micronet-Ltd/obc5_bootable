@@ -10,6 +10,5 @@ LOCAL_C_INCLUDES += external/zlib/ \
 		    bootable/recovery
 LOCAL_STATIC_LIBRARIES := libz
 LOCAL_STATIC_LIBRARIES += libcutils libstdc++ libc
-# libsparse_static
 
 include $(BUILD_EXECUTABLE)
