@@ -81,8 +81,8 @@ extern "C" {
 #define TTYHSL0_UPD_LOG "/dev/ttyHSL0"
 
 #undef REDIRECT_STDIO
-//#define REDIRECT_STDIO MCU_UPD_LOG
-#define REDIRECT_STDIO TTYHSL0_UPD_LOG
+#define REDIRECT_STDIO MCU_UPD_LOG
+//#define REDIRECT_STDIO TTYHSL0_UPD_LOG
 
 #if defined (REDIRECT_STDIO)
 static void redirect_stdio(const char* filename)
@@ -156,37 +156,6 @@ static int wait_for_file(const char *filename, int timeout)
 
     return err;
 }
-
-#if 0
-static int check_rb_delta_exist(const char *filename, int timeout)
-{
-    struct stat info;
-    time_t timeout_time = gettime() + timeout;
-    int err = -1;
-
-    do {
-        err = stat(filename, &info);
-        if (0 == err) {
-            printf("mcu update[%s]: %s found\n", __func__, filename);
-            break;
-        }
-
-        if (errno == ENOENT) {
-           // printf("mcu update[%s]: %s not found\n", __func__, filename);
-        }
-
-        if (-1 != timeout) {
-            if (gettime() > timeout_time) {
-                printf("mcu update[%s]: %s time out\n", __func__, filename);
-                break;
-            }
-        }
-        usleep(10000);
-    } while (1); 
-
-    return err;
-}
-#endif
 
 #define S_REC_0 0
 #define S_REC_1 1
@@ -431,14 +400,34 @@ static uint32_t crc_32(uint8_t *page, int len) {
 static int fpga_need_for_update(FILE *f, const char *rev) {
     int rd;
     char b[128], *pb;
-    time_t t_r, t_f;
-    tm tm_r, tm_f;
+    time_t t_f;
+    tm tm_f;
+    FILE *frev;
+    char const *fpga_rev = "/cache/fpga-rev.txt";
+
+    rd = wait_for_file(fpga_rev, 1);
+    if (0 == rd) {
+        frev = fopen(fpga_rev, "r+"); 
+        rd = fread(b, sizeof(b[0]), 8, frev);
+        if (8 == rd && strncmp(b, rev, 8) <= 0) {
+            fclose(frev);
+            printf("mcu update[%s]: updated to version %s\n", __func__, rev);
+
+            return 0;
+        }
+        rewind(frev);
+    } else {
+        frev = fopen(fpga_rev, "w"); 
+    }
+
+    fwrite(rev, sizeof(*rev), 8, frev);
+    fclose(frev);
 
     rd = fread(b, 1, 82, f);
     b[rd-1] = 0;
     if (rd != 82) {
         printf("mcu update[%s]: failure to read fpga binary[%s]\n", __func__, strerror(errno));
-        return 1;
+        return 0;
     }
 
     pb = &b[2];
@@ -467,12 +456,10 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
         // TODO: real revision check
         //
         strptime(pb, "%b %d %Y %H:%M:%S", &tm_f);
-        strptime(rev, "%b %d %Y %H:%M:%S", &tm_r);
 
-        t_r = mktime(&tm_r);
         t_f = mktime(&tm_f);
         //if (difftime(t_f, t_r) < 0) {
-            printf("mcu update[%s]: fpga rev don't match %s <----- %s\n", __func__, rev, pb);
+            printf("mcu update[%s]: fpga update built %s\n", __func__, pb);
             return 1;
         //}
 #if 0
