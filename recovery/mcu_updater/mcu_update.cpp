@@ -422,6 +422,7 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
 
     fwrite(rev, sizeof(*rev), 8, frev);
     fclose(frev);
+    sync();
 
     rd = fread(b, 1, 82, f);
     b[rd-1] = 0;
@@ -516,6 +517,8 @@ int main(int argc, char **argv)
         fi = fopen(recovery_list, "r");
         if (fi) {
             char *tok, *cmd = 0, *part = 0, *arg = 0;
+
+            redirect_stdio(TTYHSL0_UPD_LOG);
             while (fgets((char *)flash_page, sizeof(flash_page) - 1, fi)) {
                 flash_page[sizeof(flash_page) - 1] = 0;
                 if ('#' == flash_page[0]) {
@@ -535,6 +538,7 @@ int main(int argc, char **argv)
             }
 
             fclose(fi); 
+            redirect_stdio(REDIRECT_STDIO);
 
             return 0;
         }
@@ -722,7 +726,9 @@ int main(int argc, char **argv)
                             } while (i == MCU_UPD_SPI_FLASH_PAGE_L);
 
                             start = time(&start);
-                            usleep(100*1000);
+                            redirect_stdio(TTYHSL0_UPD_LOG);
+                            sync();
+                            usleep(1000*1000);
                             if (0 == err) {
                                 printf("mcu update[%s]: signal about update done %s\n", __func__, ctime(&start));
                                 if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_SFD, strlen(MCU_UPD_SFD))) {
@@ -910,7 +916,9 @@ int main(int argc, char **argv)
         }
 
         printf("mcu update[%s]: signal about update done\n", __func__);
-        usleep(100*1000);
+        redirect_stdio(TTYHSL0_UPD_LOG);
+        sync();
+        usleep(1000*1000);
         if (0 == err) {
             if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
                 printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
