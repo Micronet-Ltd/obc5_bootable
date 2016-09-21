@@ -402,6 +402,10 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
     char b[128], *pb;
     time_t t_f;
     tm tm_f;
+    char str[16] = {0};
+    unsigned long ver1, ver2;
+
+#if 0
     FILE *frev;
     char const *fpga_rev = "/cache/fpga-rev.txt";
 
@@ -423,21 +427,25 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
     fwrite(rev, sizeof(*rev), 8, frev);
     fclose(frev);
     sync();
-
+#endif
     rd = fread(b, 1, 82, f);
     b[rd-1] = 0;
     if (rd != 82) {
         printf("mcu update[%s]: failure to read fpga binary[%s]\n", __func__, strerror(errno));
         return 0;
     }
-
-    pb = &b[2];
+    if(0xFF != b[0] || 0x00 != b[1] ) {
+        printf("mcu update[%s]: fpga binary is invalid [started with 0x%02X,0x%02X]\n", __func__, b[0], b[1]);
+        return 0;
+    }
+/*
+    pb = &b[10];
     if (0 != strncmp(pb, "Lattice", 7)) {
         printf("mcu update[%s]: fpga binary is invalid [%s]\n", __func__, b);
-        return 1;
+        return 0;
     }
 
-    pb += strlen(&b[2]) + 1;
+    pb += strlen(&b[10]) + 1;
     pb += strlen(pb) + 1;
     if (0 != strncmp(pb, "Part: iCE40HX4K-CB132", 21)) {
         printf("mcu update[%s]: invalid header of fpga binary[%s]\n", __func__, &b[31]);
@@ -449,27 +457,50 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
         printf("mcu update[%s]: invalid build date fpga binary\n", __func__);
         return 0;
     }
+*/
+    pb = &b[2];//pb += 6;
 
-    pb += 6;
+    //if (0 != *pb)
+    {
 
-    if (0 != *pb) {
-        // Vladimir
-        // TODO: real revision check
-        //
+    	rd = 0;
+    	while(rd < 8) {
+			printf("%c", pb[rd]);
+    		if(0 == isxdigit(pb[rd])) {
+    	        printf("\nmcu update[%s]: invalid version in fpga binary\n", __func__);
+    			return 0;
+    		}
+    		rd++;
+    	}
+    	printf("\n");
+    	rd = 0;
+    	while(rd < 8) {
+    		if(0 == isxdigit(pb[rd++])) {
+    	        printf("mcu update[%s]: invalid version - do update\n", __func__);
+    			return 1;
+    		}
+    	}
         strptime(pb, "%b %d %Y %H:%M:%S", &tm_f);
 
         t_f = mktime(&tm_f);
         //if (difftime(t_f, t_r) < 0) {
             printf("mcu update[%s]: fpga update built %s\n", __func__, pb);
-            return 1;
+        //    return 1;
         //}
+        rd = 8;
+        strncpy(str, pb, rd);
+        ver1 = strtol(str, NULL, 16);
+        strncpy(str, rev, rd);
+        ver2 = strtol (str, NULL, 16);
+        if(ver1 != ver2)
+        	return 1;
 #if 0
         rd = min(strlen(rev), strlen(pb))
         do {
-            if (*rev++ < *pb++) {
+            if (*rev++ != *pb++) {
                 return 1;
             }
-        } while (red--);
+        } while (rd--);
 #endif
     }
 
