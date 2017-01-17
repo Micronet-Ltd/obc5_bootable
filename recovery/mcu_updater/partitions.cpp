@@ -50,7 +50,6 @@
 #include "partitions.h"
 #include "debug.h"
 #include "utils.h"
-//#include "protocol.h"
 
 #define BLKRRPART  _IO(0x12,95) /* re-read partition table */
 #define BLKSSZGET  _IO(0x12,104)

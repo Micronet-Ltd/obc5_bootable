@@ -157,37 +157,6 @@ static int wait_for_file(const char *filename, int timeout)
     return err;
 }
 
-#if 0
-static int check_rb_delta_exist(const char *filename, int timeout)
-{
-    struct stat info;
-    time_t timeout_time = gettime() + timeout;
-    int err = -1;
-
-    do {
-        err = stat(filename, &info);
-        if (0 == err) {
-            printf("mcu update[%s]: %s found\n", __func__, filename);
-            break;
-        }
-
-        if (errno == ENOENT) {
-           // printf("mcu update[%s]: %s not found\n", __func__, filename);
-        }
-
-        if (-1 != timeout) {
-            if (gettime() > timeout_time) {
-                printf("mcu update[%s]: %s time out\n", __func__, filename);
-                break;
-            }
-        }
-        usleep(10000);
-    } while (1); 
-
-    return err;
-}
-#endif
-
 #define S_REC_0 0
 #define S_REC_1 1
 #define S_REC_2 2
@@ -431,23 +400,52 @@ static uint32_t crc_32(uint8_t *page, int len) {
 static int fpga_need_for_update(FILE *f, const char *rev) {
     int rd;
     char b[128], *pb;
-    time_t t_r, t_f;
-    tm tm_r, tm_f;
+    time_t t_f;
+    tm tm_f;
+    char str[16] = {0};
+    unsigned long ver1, ver2;
 
+#if 0
+    FILE *frev;
+    char const *fpga_rev = "/cache/fpga-rev.txt";
+
+    rd = wait_for_file(fpga_rev, 1);
+    if (0 == rd) {
+        frev = fopen(fpga_rev, "r+"); 
+        rd = fread(b, sizeof(b[0]), 8, frev);
+        if (8 == rd && strncmp(b, rev, 8) <= 0) {
+            fclose(frev);
+            printf("mcu update[%s]: updated to version %s\n", __func__, rev);
+
+            return 0;
+        }
+        rewind(frev);
+    } else {
+        frev = fopen(fpga_rev, "w"); 
+    }
+
+    fwrite(rev, sizeof(*rev), 8, frev);
+    fclose(frev);
+    sync();
+#endif
     rd = fread(b, 1, 82, f);
     b[rd-1] = 0;
     if (rd != 82) {
         printf("mcu update[%s]: failure to read fpga binary[%s]\n", __func__, strerror(errno));
-        return 1;
+        return 0;
     }
-
-    pb = &b[2];
+    if(0xFF != b[0] || 0x00 != b[1] ) {
+        printf("mcu update[%s]: fpga binary is invalid [started with 0x%02X,0x%02X]\n", __func__, b[0], b[1]);
+        return 0;
+    }
+/*
+    pb = &b[10];
     if (0 != strncmp(pb, "Lattice", 7)) {
         printf("mcu update[%s]: fpga binary is invalid [%s]\n", __func__, b);
-        return 1;
+        return 0;
     }
 
-    pb += strlen(&b[2]) + 1;
+    pb += strlen(&b[10]) + 1;
     pb += strlen(pb) + 1;
     if (0 != strncmp(pb, "Part: iCE40HX4K-CB132", 21)) {
         printf("mcu update[%s]: invalid header of fpga binary[%s]\n", __func__, &b[31]);
@@ -459,29 +457,50 @@ static int fpga_need_for_update(FILE *f, const char *rev) {
         printf("mcu update[%s]: invalid build date fpga binary\n", __func__);
         return 0;
     }
+*/
+    pb = &b[2];//pb += 6;
 
-    pb += 6;
+    //if (0 != *pb)
+    {
 
-    if (0 != *pb) {
-        // Vladimir
-        // TODO: real revision check
-        //
+    	rd = 0;
+    	while(rd < 8) {
+			printf("%c", pb[rd]);
+    		if(0 == isxdigit(pb[rd])) {
+    	        printf("\nmcu update[%s]: invalid version in fpga binary\n", __func__);
+    			return 0;
+    		}
+    		rd++;
+    	}
+    	printf("\n");
+    	rd = 0;
+    	while(rd < 8) {
+    		if(0 == isxdigit(pb[rd++])) {
+    	        printf("mcu update[%s]: invalid version - do update\n", __func__);
+    			return 1;
+    		}
+    	}
         strptime(pb, "%b %d %Y %H:%M:%S", &tm_f);
-        strptime(rev, "%b %d %Y %H:%M:%S", &tm_r);
 
-        t_r = mktime(&tm_r);
         t_f = mktime(&tm_f);
         //if (difftime(t_f, t_r) < 0) {
-            printf("mcu update[%s]: fpga rev don't match %s <----- %s\n", __func__, rev, pb);
-            return 1;
+            printf("mcu update[%s]: fpga update built %s\n", __func__, pb);
+        //    return 1;
         //}
+        rd = 8;
+        strncpy(str, pb, rd);
+        ver1 = strtol(str, NULL, 16);
+        strncpy(str, rev, rd);
+        ver2 = strtol (str, NULL, 16);
+        if(ver1 != ver2)
+        	return 1;
 #if 0
         rd = min(strlen(rev), strlen(pb))
         do {
-            if (*rev++ < *pb++) {
+            if (*rev++ != *pb++) {
                 return 1;
             }
-        } while (red--);
+        } while (rd--);
 #endif
     }
 
@@ -529,6 +548,8 @@ int main(int argc, char **argv)
         fi = fopen(recovery_list, "r");
         if (fi) {
             char *tok, *cmd = 0, *part = 0, *arg = 0;
+
+            redirect_stdio(TTYHSL0_UPD_LOG);
             while (fgets((char *)flash_page, sizeof(flash_page) - 1, fi)) {
                 flash_page[sizeof(flash_page) - 1] = 0;
                 if ('#' == flash_page[0]) {
@@ -548,6 +569,7 @@ int main(int argc, char **argv)
             }
 
             fclose(fi); 
+            redirect_stdio(REDIRECT_STDIO);
 
             return 0;
         }
@@ -735,7 +757,9 @@ int main(int argc, char **argv)
                             } while (i == MCU_UPD_SPI_FLASH_PAGE_L);
 
                             start = time(&start);
-                            usleep(100*1000);
+                            redirect_stdio(TTYHSL0_UPD_LOG);
+                            sync();
+                            usleep(1000*1000);
                             if (0 == err) {
                                 printf("mcu update[%s]: signal about update done %s\n", __func__, ctime(&start));
                                 if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_SFD, strlen(MCU_UPD_SFD))) {
@@ -923,7 +947,9 @@ int main(int argc, char **argv)
         }
 
         printf("mcu update[%s]: signal about update done\n", __func__);
-        usleep(100*1000);
+        redirect_stdio(TTYHSL0_UPD_LOG);
+        sync();
+        usleep(1000*1000);
         if (0 == err) {
             if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_PFD, strlen(MCU_UPD_PFD))) {
                 printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
