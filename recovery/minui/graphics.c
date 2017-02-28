@@ -30,7 +30,9 @@
 
 #include <time.h>
 
-#include "font_10x18.h"
+//qj #include "font_10x18.h"
+#include "font_32x60.h"
+
 #include "minui.h"
 #include "graphics.h"
 
