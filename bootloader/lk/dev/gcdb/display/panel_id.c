@@ -712,6 +712,40 @@ static struct mipi_dsi_cmd mipi_panel_fl11280_manufacture_id_cmd2 =
 static struct mipi_dsi_cmd fl11280_extend_cmd_enable_cmd =
     {sizeof(fl11280_extend_cmd_enable), fl11280_extend_cmd_enable};
 
+
+// by skj
+static char mipi_panel_st7703_manufacture_id[4] = 
+      {0x04, 0x00, 0x06, 0xA0}; /* DTYPE_DCS_READ */
+
+static struct mipi_dsi_cmd mipi_panel_st7703_manufacture_id_cmd =
+    {sizeof(mipi_panel_st7703_manufacture_id), mipi_panel_st7703_manufacture_id};
+
+static uint32_t mipi_st7703_read_id(void)
+{
+    char rec_buf[24];
+    char *rp = rec_buf;
+    uint32_t *lp, data;
+	int ret = 0;
+		
+
+    ret =mipi_dsi_cmds_tx(&mipi_panel_st7703_manufacture_id_cmd, 1);
+	if(ret)
+		dprintf(ALWAYS, "mipi_st7703_read_id mipi_dsi_cmds_tx err2\n");	
+    mdelay(1);
+    ret =mipi_dsi_cmds_rx(&rp, 2);
+	if(ret)
+		dprintf(ALWAYS, "mipi_st7703_read_id mipi_dsi_cmds_rx err\n");	
+
+    lp = (uint32_t *)rp;
+    
+    data = (uint32_t)*lp;
+    data = ntohl(data);
+    dprintf(ALWAYS, "mipi_st7703_read_id() data=0x%x\n",data);
+    data = data &0xff0000;
+    data=data>>16;   
+    return data;
+}
+
 static uint32_t mipi_fl11280_read_id(void)
 {
     char rec_buf[24];
@@ -876,7 +910,10 @@ uint32_t panel_detect(uint32_t adc_min,uint32_t adc_max,uint32_t id,uint32_t ic_
     */
 	uint32_t  panel_ic_name;
 	uint32_t lcd_val;
-	
+
+	if(7703==ic_type){ // skj
+		return mipi_st7703_read_id();
+	}
 	lcd_val = get_lcd_adc();
 	
 	if((lcd_adc==1)&&(ic_type==0)){
