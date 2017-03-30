@@ -37,10 +37,15 @@
 /*---------------------------------------------------------------------------*/
 /* GPIO configuration                                                        */
 /*---------------------------------------------------------------------------*/
+#if defined(BOOT_FEATURE_A2001) || defined(BOOT_FEATURE_A3001) || defined(BOOT_FEATURE_A3002)
 static struct gpio_pin reset_gpio = {
   "msmgpio", 25, 3, 1, 0, 1
 };
-
+#else 
+static struct gpio_pin reset_gpio = {
+  "msmgpio", 97, 3, 1, 0, 1
+};
+#endif
 static struct gpio_pin ts_reset_gpio = {
   "msmgpio", 12, 3, 1, 0, 1
 };
@@ -185,12 +190,17 @@ enum {
 	JDI_A216_FHD_VIDEO_PANEL,
 	NT35596_BOOYI_AUO_FHD_550_VIDEO_PANEL,
 	SAMSUNG_S6D7AA0X01_1280_800_VIDEO_PANEL,
+	BP080WX1_S6D7AA0X01_1280_800_VIDEO_PANEL,
 	BOE_ILI6336_WXGA_VIDEO_PANEL,
 	OTM1901A_BOOYI_AUO_FHD_550_VIDEO_PANEL,
+	OTM1901A_GONGTAI_AUO_FHD_550_VIDEO_PANEL,
 	NT35596_TXD_AUO_FHD_550_VIDEO_PANEL,
 	H8394D_TXD_HD_INNOLUX_VIDEO_PANEL,
 	H8394F_JD_HD_AUO_VIDEO_PANEL,
 	OTM1284_LEAD_HD_CPT_VIDEO_PANEL,
+	COMMON_NT71410_1920_1200_VIDEO_PANEL,
+	NT35521S_720P_VIDEO_PANEL,
+	ST7703_HXGD_HD_5P5_VIDEO_PANEL,
 	UNKNOWN_PANEL
 };
 
