@@ -55,6 +55,7 @@
 #include "panel_bp080wx1_s6d7aa0x01_1280_800_video.h"
 #include "panel_nt35521s_720p_video.h"
 #include "panel_st7703-hxgd-hd-5p5-video.h"
+#include "panel_hx8394f-frd5p5-hd-video.h"
 
 #define DISPLAY_MAX_PANEL_DETECTION 6
 #define OTM8019A_FWVGA_VIDEO_PANEL_ON_DELAY 50
@@ -329,6 +330,31 @@ static int init_panel_data(struct panel_struct *panelstruct,
 		pinfo->mipi.adc_max = H8394D_TXD_HD_INNOLUX_550_VIDEO_ADC_MAX;
 		pinfo->mipi.adc_min = H8394D_TXD_HD_INNOLUX_550_VIDEO_ADC_MIN;
 		break;
+	case H8394F_FRD_HD_VIDEO_PANEL:
+		panelstruct->paneldata    = &h8394f_frd_hd_hd_550_video_panel_data;
+		panelstruct->panelres     = &h8394f_frd_hd_hd_550_video_panel_res;
+		panelstruct->color        = &h8394f_frd_hd_hd_550_video_color;
+		panelstruct->videopanel   = &h8394f_frd_hd_hd_550_video_video_panel;
+		panelstruct->commandpanel = &h8394f_frd_hd_hd_550_video_command_panel;
+		panelstruct->state        = &h8394f_frd_hd_hd_550_video_state;
+		panelstruct->laneconfig   = &h8394f_frd_hd_hd_550_video_lane_config;
+		panelstruct->paneltiminginfo
+					 = &h8394f_frd_hd_hd_550_video_timing_info;
+		panelstruct->panelresetseq
+					= &h8394f_frd_hd_hd_550_video_panel_reset_seq;
+		panelstruct->backlightinfo = &h8394f_frd_hd_hd_550_video_backlight;
+		pinfo->mipi.panel_cmds
+					= h8394f_frd_hd_hd_550_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= H8394F_FRD_HD_550_VIDEO_ON_COMMAND;
+		memcpy(phy_db->timing,
+				h8394f_frd_hd_hd_550_video_timings, TIMING_SIZE);
+		pinfo->mipi.signature = H8394F_FRD_HD_550_VIDEO_SIGNATURE;
+		pinfo->mipi.lcd_adc = H8394F_FRD_HD_550_VIDEO_ADC_STATUS;
+		pinfo->mipi.ic_type = H8394F_FRD_HD_550_VIDEO_IC_TYPE;
+		pinfo->mipi.adc_max = H8394F_FRD_HD_550_VIDEO_ADC_MAX;
+		pinfo->mipi.adc_min = H8394F_FRD_HD_550_VIDEO_ADC_MIN;
+		break;
 	case H8394F_JD_HD_AUO_VIDEO_PANEL:
 		panelstruct->paneldata    = &h8394f_jd_hd_auo_hd_550_video_panel_data;
 		panelstruct->panelres     = &h8394f_jd_hd_auo_hd_550_video_panel_res;
@@ -536,6 +562,9 @@ int oem_panel_select(const char *panel_name, struct panel_struct *panelstruct,
 				case 3: // by skj
 					panel_id = ST7703_HXGD_HD_5P5_VIDEO_PANEL;
 					break;
+				case 4: // by skj
+					panel_id = H8394F_FRD_HD_VIDEO_PANEL;
+					break;					
 				default:
 					panel_id = UNKNOWN_PANEL;
 					dprintf(CRITICAL, "Unknown panel\n");

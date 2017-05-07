@@ -914,6 +914,9 @@ uint32_t panel_detect(uint32_t adc_min,uint32_t adc_max,uint32_t id,uint32_t ic_
 	if(7703==ic_type){ // skj
 		return mipi_st7703_read_id();
 	}
+	if(8394==ic_type){
+		return 8394;	
+	}
 	lcd_val = get_lcd_adc();
 	
 	if((lcd_adc==1)&&(ic_type==0)){
