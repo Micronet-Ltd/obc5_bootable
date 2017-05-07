@@ -298,7 +298,6 @@ static int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
     int xferd, err = -1;
     time_t timeout_time = gettime() + tout;
     char *r = buf;
-
     do {
         if (-1 != tout) {
             if (gettime() > timeout_time)
