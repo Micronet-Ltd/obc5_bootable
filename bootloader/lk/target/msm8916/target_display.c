@@ -572,6 +572,13 @@ int target_panel_reset(uint8_t enable, struct panel_reset_sequence *resetseq,
 				bkl_gpio.pin_strength, bkl_gpio.pin_state);
 			gpio_set_dir(bkl_gpio.pin_id, 2);
 		}
+		
+#if defined(BOOT_FEATURE_Q10)||defined(BOOT_FEATURE_Q8)||defined(BOOT_FEATURE_Q10HD)
+			gpio_tlmm_config(bkl_gpio.pin_id, 0,
+				bkl_gpio.pin_direction, bkl_gpio.pin_pull,
+				bkl_gpio.pin_strength, bkl_gpio.pin_state);
+			gpio_set_dir(bkl_gpio.pin_id, 2);
+#endif
 
 		gpio_tlmm_config(reset_gpio.pin_id, 0,
 				reset_gpio.pin_direction, reset_gpio.pin_pull,

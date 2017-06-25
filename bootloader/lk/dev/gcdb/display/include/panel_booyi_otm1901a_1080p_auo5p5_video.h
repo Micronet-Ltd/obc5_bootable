@@ -41,10 +41,10 @@
 
 #define BOOYI_OTM1901A_1080P_5P5_VIDEO_SIGNATURE 0x1901
 #define BOOYI_OTM1901A_1080P_5P5_VIDEO_ID 1
-#define BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_STATUS 0
+#define BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_STATUS 1
 #define	BOOYI_OTM1901A_1080P_5P5_VIDEO_IC_TYPE 1
-#define	BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_MAX  -1
-#define	BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_MIN  -1
+#define	BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_MAX  (2000*1000)
+#define	BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_MIN  (800*1000)
 /*---------------------------------------------------------------------------*/
 /* Panel configuration                                                       */
 /*---------------------------------------------------------------------------*/
@@ -188,7 +188,7 @@ static char  booyi_otm1901a_1080p_5p5_video_on_cmd113[]={0x02,0x00,0x39,0xC0,0x2
 static char booyi_otm1901a_1080p_5p5_video_on_cmd114[]={0x02,0x00,0x29,0xC0,0x00,0x00,0xff,0xff};      
 static char booyi_otm1901a_1080p_5p5_video_on_cmd115[]={0x02,0x00,0x29,0xC0,0x51,0xff,0xff,0xff};  
 static char booyi_otm1901a_1080p_5p5_video_on_cmd116[]={0x02,0x00,0x29,0xC0,0x00,0x00,0xff,0xff}; 
-static char booyi_otm1901a_1080p_5p5_video_on_cmd117[]={0x02,0x00,0x29,0xC0,0x53,0x2c,0xff,0xff}; 
+static char booyi_otm1901a_1080p_5p5_video_on_cmd117[]={0x02,0x00,0x29,0xC0,0x53,0x24,0xff,0xff}; 
 static char booyi_otm1901a_1080p_5p5_video_on_cmd118[]={0x02,0x00,0x29,0xC0,0x00,0x00,0xff,0xff}; 
 static char booyi_otm1901a_1080p_5p5_video_on_cmd119[]={0x02,0x00,0x29,0xC0,0x55,0x01,0xff,0xff};  
 

@@ -45,11 +45,17 @@
 #include "panel_boe_ili6366s_wxga_video.h"
 
 #include "panel_booyi_otm1901a_1080p_auo5p5_video.h"
+#include "panel_gongtai_otm1901a_1080p_auo5p5_video.h"
 #include "panel_txd_nt35596_1080p_video.h"
 
 #include "panel_h8394d-txd-innolux5p5-hd-video.h"
 #include "panel_h8394f-jd-auo5p5-hd-video.h"
 #include "panel_otm1284_lead_hd_cpt_550_video.h"
+#include "panel_nt71410_1920_1200_1010_video.h"
+#include "panel_bp080wx1_s6d7aa0x01_1280_800_video.h"
+#include "panel_nt35521s_720p_video.h"
+#include "panel_st7703-hxgd-hd-5p5-video.h"
+#include "panel_hx8394f-frd5p5-hd-video.h"
 
 #define DISPLAY_MAX_PANEL_DETECTION 6
 #define OTM8019A_FWVGA_VIDEO_PANEL_ON_DELAY 50
@@ -147,6 +153,32 @@ static int init_panel_data(struct panel_struct *panelstruct,
 		pinfo->mipi.adc_max = SAMSUNG_S6D7AA0X01_VIDEO_LCD_ADC_MAX;
 		pinfo->mipi.adc_min = SAMSUNG_S6D7AA0X01_VIDEO_LCD_ADC_MIN;
 		break;
+    case BP080WX1_S6D7AA0X01_1280_800_VIDEO_PANEL:
+		panelstruct->paneldata    = &bp080wx1_s6d7aa0x01_1280_800_video_panel_data;
+		panelstruct->panelres     = &bp080wx1_s6d7aa0x01_1280_800_video_panel_res;
+		panelstruct->color        = &bp080wx1_s6d7aa0x01_1280_800_video_color;
+		panelstruct->videopanel   = &bp080wx1_s6d7aa0x01_1280_800_video_video_panel;
+		panelstruct->commandpanel = &bp080wx1_s6d7aa0x01_1280_800_video_command_panel;
+		panelstruct->state        = &bp080wx1_s6d7aa0x01_1280_800_video_state;
+		panelstruct->laneconfig   = &bp080wx1_s6d7aa0x01_1280_800_video_lane_config;
+		panelstruct->paneltiminginfo
+					= &bp080wx1_s6d7aa0x01_1280_800_video_timing_info;
+		panelstruct->panelresetseq
+					= &bp080wx1_s6d7aa0x01_1280_800_video_reset_seq;
+		panelstruct->backlightinfo = &bp080wx1_s6d7aa0x01_1280_800_video_backlight;
+        panelstruct->paneldata->panel_with_enable_gpio = 1 ;
+		pinfo->mipi.panel_cmds
+					= bp080wx1_s6d7aa0x01_1280_800_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= BP080WX1_S6D7AA0X01_1280_800_VIDEO_ON_COMMAND;
+		memcpy(phy_db->timing,
+				bp080wx1_s6d7aa0x01_1280_800_video_timings, TIMING_SIZE);
+        pinfo->mipi.signature = BP080WX1_S6D7AA0X01_VIDEO_SIGNATURE;
+		pinfo->mipi.ic_type = BP080WX1_S6D7AA0X01_VIDEO_IC_TYPE;
+		pinfo->mipi.lcd_adc = BP080WX1_S6D7AA0X01_VIDEO_LCD_ADC_STATUS;
+		pinfo->mipi.adc_max = BP080WX1_S6D7AA0X01_VIDEO_LCD_ADC_MAX;
+		pinfo->mipi.adc_min = BP080WX1_S6D7AA0X01_VIDEO_LCD_ADC_MIN;
+		break;		
 	case BOE_ILI6336_WXGA_VIDEO_PANEL:                            
 		panelstruct->paneldata    = &boe_ili6336_wxga_video_panel_data;   
 		panelstruct->panelres     = &boe_ili6336_wxga_video_panel_res;    
@@ -198,6 +230,31 @@ static int init_panel_data(struct panel_struct *panelstruct,
 		pinfo->mipi.adc_max = BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_MAX;
 		pinfo->mipi.adc_min = BOOYI_OTM1901A_1080P_5P5_VIDEO_ADC_MIN;
 		break;  
+	case OTM1901A_GONGTAI_AUO_FHD_550_VIDEO_PANEL:
+		panelstruct->paneldata    = &gongtai_otm1901a_1080p_5p5_video_panel_data;
+		panelstruct->panelres     = &gongtai_otm1901a_1080p_5p5_video_panel_res;
+		panelstruct->color        = &gongtai_otm1901a_1080p_5p5_video_color;
+		panelstruct->videopanel   = &gongtai_otm1901a_1080p_5p5_video_video_panel;
+		panelstruct->commandpanel = &gongtai_otm1901a_1080p_5p5_video_command_panel;
+		panelstruct->state        = &gongtai_otm1901a_1080p_5p5_video_state;
+		panelstruct->laneconfig   = &gongtai_otm1901a_1080p_5p5_video_lane_config;
+		panelstruct->paneltiminginfo
+					 = &gongtai_otm1901a_1080p_5p5_video_timing_info;
+		panelstruct->panelresetseq
+					= &gongtai_otm1901a_1080p_5p5_video_panel_reset_seq;
+		panelstruct->backlightinfo = &gongtai_otm1901a_1080p_5p5_video_backlight;
+		pinfo->mipi.panel_cmds
+					= gongtai_otm1901a_1080p_5p5_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= GONGTAI_OTM1901A_1080P_5P5_VIDEO_ON_COMMAND;
+		memcpy(phy_db->timing,
+				gongtai_otm1901a_1080p_5p5_video_timings, TIMING_SIZE);
+		pinfo->mipi.signature = GONGTAI_OTM1901A_1080P_5P5_VIDEO_SIGNATURE;
+		pinfo->mipi.lcd_adc = GONGTAI_OTM1901A_1080P_5P5_VIDEO_ADC_STATUS;
+		pinfo->mipi.ic_type = GONGTAI_OTM1901A_1080P_5P5_VIDEO_IC_TYPE;
+		pinfo->mipi.adc_max = GONGTAI_OTM1901A_1080P_5P5_VIDEO_ADC_MAX;
+		pinfo->mipi.adc_min = GONGTAI_OTM1901A_1080P_5P5_VIDEO_ADC_MIN;
+		break;  		
 	case NT35596_TXD_AUO_FHD_550_VIDEO_PANEL:
 		panelstruct->paneldata    = &txd_nt35596_1080p_video_panel_data;
 		panelstruct->panelres     = &txd_nt35596_1080p_video_panel_res;
@@ -223,6 +280,31 @@ static int init_panel_data(struct panel_struct *panelstruct,
 		pinfo->mipi.adc_max = TXD_NT35596_1080P_VIDEO_ADC_MAX;
 		pinfo->mipi.adc_min = TXD_NT35596_1080P_VIDEO_ADC_MIN;
 		break;
+	case ST7703_HXGD_HD_5P5_VIDEO_PANEL:
+		panelstruct->paneldata    = &hxgd_st7703_hd_5p5_video_panel_data;
+		panelstruct->panelres     = &hxgd_st7703_hd_5p5_video_panel_res;
+		panelstruct->color        = &hxgd_st7703_hd_5p5_video_color;
+		panelstruct->videopanel   = &hxgd_st7703_hd_5p5_video_video_panel;
+		panelstruct->commandpanel = &hxgd_st7703_hd_5p5_video_command_panel;
+		panelstruct->state        = &hxgd_st7703_hd_5p5_video_state;
+		panelstruct->laneconfig   = &hxgd_st7703_hd_5p5_video_lane_config;
+		panelstruct->paneltiminginfo
+					 = &hxgd_st7703_hd_5p5_video_timing_info;
+		panelstruct->panelresetseq
+					= &hxgd_st7703_hd_5p5_video_panel_reset_seq;
+		panelstruct->backlightinfo = &hxgd_st7703_hd_5p5_video_backlight;
+		pinfo->mipi.panel_cmds
+					= hxgd_st7703_hd_5p5_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= HXGD_ST7703_HD_5P5_VIDEO_ON_COMMAND;
+		memcpy(phy_db->timing,
+				h8394d_txd_hd_innolux_hd_550_video_timings, TIMING_SIZE);
+		pinfo->mipi.signature = HXGD_ST7703_HD_5P5_VIDEO_SIGNATURE;
+		pinfo->mipi.lcd_adc = HXGD_ST7703_HD_5P5_VIDEO_ADC_STATUS;
+		pinfo->mipi.ic_type = HXGD_ST7703_HD_5P5_VIDEO_IC_TYPE;
+		pinfo->mipi.adc_max = HXGD_ST7703_HD_5P5_VIDEO_ADC_MAX;
+		pinfo->mipi.adc_min = HXGD_ST7703_HD_5P5_VIDEO_ADC_MIN;
+		break;		
 	case H8394D_TXD_HD_INNOLUX_VIDEO_PANEL:
 		panelstruct->paneldata    = &h8394d_txd_hd_innolux_hd_550_video_panel_data;
 		panelstruct->panelres     = &h8394d_txd_hd_innolux_hd_550_video_panel_res;
@@ -247,6 +329,31 @@ static int init_panel_data(struct panel_struct *panelstruct,
 		pinfo->mipi.ic_type = H8394D_TXD_HD_INNOLUX_550_VIDEO_IC_TYPE;
 		pinfo->mipi.adc_max = H8394D_TXD_HD_INNOLUX_550_VIDEO_ADC_MAX;
 		pinfo->mipi.adc_min = H8394D_TXD_HD_INNOLUX_550_VIDEO_ADC_MIN;
+		break;
+	case H8394F_FRD_HD_VIDEO_PANEL:
+		panelstruct->paneldata    = &h8394f_frd_hd_hd_550_video_panel_data;
+		panelstruct->panelres     = &h8394f_frd_hd_hd_550_video_panel_res;
+		panelstruct->color        = &h8394f_frd_hd_hd_550_video_color;
+		panelstruct->videopanel   = &h8394f_frd_hd_hd_550_video_video_panel;
+		panelstruct->commandpanel = &h8394f_frd_hd_hd_550_video_command_panel;
+		panelstruct->state        = &h8394f_frd_hd_hd_550_video_state;
+		panelstruct->laneconfig   = &h8394f_frd_hd_hd_550_video_lane_config;
+		panelstruct->paneltiminginfo
+					 = &h8394f_frd_hd_hd_550_video_timing_info;
+		panelstruct->panelresetseq
+					= &h8394f_frd_hd_hd_550_video_panel_reset_seq;
+		panelstruct->backlightinfo = &h8394f_frd_hd_hd_550_video_backlight;
+		pinfo->mipi.panel_cmds
+					= h8394f_frd_hd_hd_550_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= H8394F_FRD_HD_550_VIDEO_ON_COMMAND;
+		memcpy(phy_db->timing,
+				h8394f_frd_hd_hd_550_video_timings, TIMING_SIZE);
+		pinfo->mipi.signature = H8394F_FRD_HD_550_VIDEO_SIGNATURE;
+		pinfo->mipi.lcd_adc = H8394F_FRD_HD_550_VIDEO_ADC_STATUS;
+		pinfo->mipi.ic_type = H8394F_FRD_HD_550_VIDEO_IC_TYPE;
+		pinfo->mipi.adc_max = H8394F_FRD_HD_550_VIDEO_ADC_MAX;
+		pinfo->mipi.adc_min = H8394F_FRD_HD_550_VIDEO_ADC_MIN;
 		break;
 	case H8394F_JD_HD_AUO_VIDEO_PANEL:
 		panelstruct->paneldata    = &h8394f_jd_hd_auo_hd_550_video_panel_data;
@@ -298,6 +405,61 @@ static int init_panel_data(struct panel_struct *panelstruct,
 		pinfo->mipi.adc_max = OTM1284_LEAD_HD_CPT_550_VIDEO_ADC_MAX;
 		pinfo->mipi.adc_min = OTM1284_LEAD_HD_CPT_550_VIDEO_ADC_MIN;
 		break;
+   case COMMON_NT71410_1920_1200_VIDEO_PANEL:
+		panelstruct->paneldata    = &common_nt71410_1920_1200_video_panel_data;
+		panelstruct->panelres     = &common_nt71410_1920_1200_video_panel_res;
+		panelstruct->color        = &common_nt71410_1920_1200_video_color;
+		panelstruct->videopanel   = &common_nt71410_1920_1200_video_video_panel;
+		panelstruct->commandpanel = &common_nt71410_1920_1200_video_command_panel;
+		panelstruct->state        = &common_nt71410_1920_1200_video_state;
+		panelstruct->laneconfig   = &common_nt71410_1920_1200_video_lane_config;
+		panelstruct->paneltiminginfo
+					= &common_nt71410_1920_1200_video_timing_info;
+		panelstruct->panelresetseq
+					= &common_nt71410_1920_1200_video_reset_seq;
+		panelstruct->backlightinfo = &common_nt71410_1920_1200_video_backlight;
+    //panelstruct->paneldata->panel_with_enable_gpio = 1 ;
+		pinfo->mipi.panel_cmds
+					= common_nt71410_1920_1200_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= COMMON_NT71410_1920_1200_VIDEO_VIDEO_ON_COMMAND;
+		memcpy(phy_db->timing,
+				common_nt71410_1920_1200_video_timings, TIMING_SIZE);
+        pinfo->mipi.signature = COMMON_NT71410_1920_1200_SIGNATURE;
+		pinfo->mipi.ic_type = COMMON_NT71410_1920_1200_IC_TYPE;
+		pinfo->mipi.lcd_adc = COMMON_NT71410_1920_1200_LCD_ADC_STATUS;
+		pinfo->mipi.adc_max = COMMON_NT71410_1920_1200_LCD_ADC_MAX;
+		pinfo->mipi.adc_min = COMMON_NT71410_1920_1200_LCD_ADC_MIN;
+		//pinfo->mipi.force_clk_lane_hs=true;
+		break;
+	case NT35521S_720P_VIDEO_PANEL:
+		dprintf(CRITICAL, "  enter display NT35521S_720P_VIDEO_PANEL\n");
+		panelstruct->paneldata    = &nt35521s_720p_video_panel_data;
+		panelstruct->panelres     = &nt35521s_720p_video_panel_res;
+		panelstruct->color        = &nt35521s_720p_video_color;
+		panelstruct->videopanel   = &nt35521s_720p_video_video_panel;
+		panelstruct->commandpanel = &nt35521s_720p_video_command_panel;
+		panelstruct->state        = &nt35521s_720p_video_state;
+		panelstruct->laneconfig   = &nt35521s_720p_video_lane_config;
+		panelstruct->paneltiminginfo
+					= &nt35521s_720p_video_timing_info;
+		panelstruct->panelresetseq
+					= &nt35521s_720p_video_reset_seq;
+		panelstruct->backlightinfo = &nt35521s_720p_video_backlight;
+		pinfo->mipi.panel_cmds
+					= nt35521s_720p_video_on_command;
+		pinfo->mipi.num_of_panel_cmds
+					= ARRAY_SIZE(nt35521s_720p_video_on_command);
+		memcpy(phy_db->timing,
+				nt35521s_720p_video_timings, TIMING_SIZE);
+    pinfo->mipi.signature = NT35521S_1280_800_SIGNATURE;
+		pinfo->mipi.ic_type = NT35521S_1280_800_IC_TYPE;
+		pinfo->mipi.lcd_adc = NT35521S_1280_800_LCD_ADC_STATUS;
+		pinfo->mipi.adc_max = NT35521S_1280_800_LCD_ADC_MAX;
+		pinfo->mipi.adc_min = NT35521S_1280_800_LCD_ADC_MIN;				
+		break;
+
+
 	case UNKNOWN_PANEL:
 	default:
 		memset(panelstruct, 0, sizeof(struct panel_struct));
@@ -374,6 +536,9 @@ int oem_panel_select(const char *panel_name, struct panel_struct *panelstruct,
 				case 1:
 					panel_id = NT35596_TXD_AUO_FHD_550_VIDEO_PANEL;					
 				break;
+				case 2:
+					panel_id = OTM1901A_GONGTAI_AUO_FHD_550_VIDEO_PANEL;					
+				break;				
 				default:
 					panel_id = UNKNOWN_PANEL;
 					dprintf(CRITICAL, "Unknown panel\n");
@@ -387,12 +552,60 @@ int oem_panel_select(const char *panel_name, struct panel_struct *panelstruct,
 			switch (auto_pan_loop){                
 				case 0:
 					panel_id = H8394D_TXD_HD_INNOLUX_VIDEO_PANEL;
-				break;
+					break;
 				case 1:
 					panel_id = H8394F_JD_HD_AUO_VIDEO_PANEL;
-				break;
+					break;
 				case 2:
 					panel_id = OTM1284_LEAD_HD_CPT_VIDEO_PANEL;						
+					break;
+				case 3: // by skj
+					panel_id = ST7703_HXGD_HD_5P5_VIDEO_PANEL;
+					break;
+				case 4: // by skj
+					panel_id = H8394F_FRD_HD_VIDEO_PANEL;
+					break;					
+				default:
+					panel_id = UNKNOWN_PANEL;
+					dprintf(CRITICAL, "Unknown panel\n");
+			}
+			auto_pan_loop++;
+			dprintf(CRITICAL,"Panle_id is %d,auto_pan_loop is %d\n",
+                                                    panel_id,auto_pan_loop);
+#endif
+#if defined(BOOT_FEATURE_Q10)
+			panel_id = COMMON_NT71410_1920_1200_VIDEO_PANEL;
+			switch (auto_pan_loop){                
+				case 0:
+					panel_id = COMMON_NT71410_1920_1200_VIDEO_PANEL;
+				break;
+				default:
+					panel_id = UNKNOWN_PANEL;
+					dprintf(CRITICAL, "Unknown panel\n");
+			}
+			auto_pan_loop++;
+			dprintf(CRITICAL,"Panle_id is %d,auto_pan_loop is %d\n",
+                                                    panel_id,auto_pan_loop);
+#endif
+#if defined(BOOT_FEATURE_Q10HD)
+			panel_id = NT35521S_720P_VIDEO_PANEL;
+			switch (auto_pan_loop){
+				case 0:
+					panel_id = NT35521S_720P_VIDEO_PANEL;
+				break;				                
+				default:
+					panel_id = UNKNOWN_PANEL;
+					dprintf(CRITICAL, "Unknown panel\n");
+			}
+			auto_pan_loop++;
+			dprintf(CRITICAL,"Panle_id is %d,auto_pan_loop is %d\n",
+                                                    panel_id,auto_pan_loop);
+#endif
+#ifdef BOOT_FEATURE_Q8HD
+			panel_id = BP080WX1_S6D7AA0X01_1280_800_VIDEO_PANEL;
+			switch (auto_pan_loop){                
+				case 0:
+					panel_id = BP080WX1_S6D7AA0X01_1280_800_VIDEO_PANEL;					
 				break;
 				default:
 					panel_id = UNKNOWN_PANEL;
