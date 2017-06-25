@@ -778,6 +778,11 @@ int mdss_dsi_config(struct msm_fb_panel_data *panel)
 	mipi_pinfo.adc_min= pinfo->mipi.adc_min;
 	mipi_pinfo.adc_max= pinfo->mipi.adc_max;
 /*Modify for logo display in lk end*/
+
+#if defined(ENABLE_FORCE_CLK)
+	mipi_pinfo.force_clk_lane_hs=1;
+#endif
+
 	mdss_dsi_phy_init(&mipi_pinfo, MIPI_DSI0_BASE, DSI0_PHY_BASE);
 	if (pinfo->mipi.dual_dsi)
 		mdss_dsi_phy_init(&mipi_pinfo, MIPI_DSI1_BASE, DSI1_PHY_BASE);
@@ -831,6 +836,9 @@ int mdss_dsi_post_on(struct msm_fb_panel_data *panel)
 			dprintf(CRITICAL, "dsi panel init error\n");
 		}
 	}
+#if defined(BOOT_FEATURE_Q10)
+	mdelay(500);
+#endif	
 	return ret;
 }
 

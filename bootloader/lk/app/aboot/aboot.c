@@ -81,6 +81,9 @@ extern void platform_uninit(void);
 extern void target_uninit(void);
 extern int get_target_boot_params(const char *cmdline, const char *part,
 				  char *buf, int buflen);
+#if defined(BOOT_FEATURE_Q10)
+void usb_q10(void);
+#endif
 
 void write_device_info_mmc(device_info *dev);
 void write_device_info_flash(device_info *dev);
@@ -3073,6 +3076,9 @@ void aboot_init(const struct app_descriptor *app)
 	}
 
 normal_boot:
+#if defined(BOOT_FEATURE_Q10)	
+	usb_q10();
+#endif	
 	if (!boot_into_fastboot)
 	{
 		if (target_is_emmc_boot())
@@ -3115,6 +3121,9 @@ normal_boot:
 	partition_dump();
 
 	/* initialize and start fastboot */
+#if defined(BOOT_FEATURE_Q10)	
+	usb_q10();
+#endif	
 	fastboot_init(target_get_scratch_address(), target_get_max_flash_size());
 }
 

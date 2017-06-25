@@ -167,6 +167,17 @@ static void target_keystatus()
 		keys_post_event(KEY_VOLUMEUP, 1);
 }
 
+#if defined(BOOT_FEATURE_Q10)
+void usb_q10(void)
+{
+	dprintf(INFO, "usb_q10()\n");
+	gpio_tlmm_config(16, 0,	GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_ENABLE);
+	gpio_tlmm_config(25, 0,	GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA, GPIO_ENABLE);
+	gpio_set_dir(16,0);
+	gpio_set_dir(25,0);	
+}
+#endif
+
 void target_init(void)
 {
 	uint32_t base_addr;
@@ -176,6 +187,9 @@ void target_init(void)
 
 	spmi_init(PMIC_ARB_CHANNEL_NUM, PMIC_ARB_OWNER_ID);
 
+#if defined(BOOT_FEATURE_Q10)
+	usb_q10();
+#endif
 	target_keystatus();
 
 	target_sdc_init();
