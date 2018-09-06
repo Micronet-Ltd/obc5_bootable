@@ -533,6 +533,7 @@ int main(int argc, char **argv)
     time_t start = time(0);
     char *expect[4] = {0};
     bool is_there_conf_file = false;
+    unsigned int sec_left_to_sleep = 0;
 
 #if defined (REDIRECT_STDIO)
     redirect_stdio(REDIRECT_STDIO);
@@ -801,8 +802,15 @@ int main(int argc, char **argv)
             } else {
                 printf("mcu update[%s]: %s mcu doesn't support fpga rev cmd, SPI Flash won't updated %s\n", __func__, tty_n, strerror(errno));
             }
+            //waiting for the device to reset
+            sec_left_to_sleep = 10;
+            while(sec_left_to_sleep)
+            {
+                //making sure the device will wait regardless of signals or interrupts
+                sec_left_to_sleep = sleep(sec_left_to_sleep);
+            }
         }
-        else if (is_there_conf_file){
+        if (is_there_conf_file){
             expect[0] = (char *)MCU_UPD_OK;
             expect[1] = 0;
             err = tx2mcu_cmd(fd_tty, (char *)MCU_CFG, rev, expect, strlen(MCU_CFG), 8, 3, MCU_UPD_RX_TO);
@@ -859,6 +867,13 @@ int main(int argc, char **argv)
             } else {
                 printf("flash memory[%s]: %s recieved an error from the mcu %s\n", __func__, tty_n, strerror(errno));
             }
+        }
+
+        sec_left_to_sleep = 10;
+        while(sec_left_to_sleep)
+        {
+            //making sure the device will wait regardless of signals or interrupts
+            sec_left_to_sleep = sleep(sec_left_to_sleep);
         }
 
         // check version
