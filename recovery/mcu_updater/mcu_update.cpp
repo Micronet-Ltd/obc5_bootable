@@ -60,6 +60,7 @@ extern "C" {
 #define MCU_UPD_FPGA_nCRC        "nCRC"
 #define MCU_UPD_SFD              "SFD"
 #define MCU_UPD_RST              "RST"
+#define MCU_CFG                  "CFG"
 
 #define MCU_UPD_REV     "REV"
 #define MCU_UPD_STA     "STA"
@@ -298,7 +299,6 @@ static int mcu2srec_rx(int fd_tty, char *buf, int len, int tout)
     int xferd, err = -1;
     time_t timeout_time = gettime() + tout;
     char *r = buf;
-
     do {
         if (-1 != tout) {
             if (gettime() > timeout_time)
@@ -524,6 +524,7 @@ int main(int argc, char **argv)
     char const *mcu_binary = "/cache/mcu0.bin";
     char const *mcu_binary2 = "/cache/mcu1.bin";
     char const *fpga_binary = "/cache/fpga.bin";
+    char const *flash_conf_binary = "/cache/custom_conf.bin";
     char const *recovery_list = "/sdcard/recovery-list.txt";
     char *mcu_srec, *sta, *er;
     char const *tty_n = "/dev/ttyHSL1";
@@ -531,6 +532,8 @@ int main(int argc, char **argv)
     uint8_t flash_page[260];
     time_t start = time(0);
     char *expect[4] = {0};
+    bool is_there_conf_file = false;
+    unsigned int sec_left_to_sleep = 0;
 
 #if defined (REDIRECT_STDIO)
     redirect_stdio(REDIRECT_STDIO);
@@ -592,6 +595,27 @@ int main(int argc, char **argv)
     start = time(&start);
     if (0 != err) {
         printf("mcu update[%s]: got doesn't exist %s\n", __func__, ctime(&start));
+    }
+
+    start = time(&start);
+    printf("mcu update[%s]: wait for config_binary %s\n", __func__, ctime(&start));
+    is_there_conf_file = false;
+    err = wait_for_file(flash_conf_binary, 1); 
+    printf("waited %S\n",ctime(&start));
+    start = time(&start);
+    if (0 == err) {
+        chmod(flash_conf_binary, S_IRUSR | S_IRGRP | S_IROTH);
+        fd_tty = open(flash_conf_binary, O_RDONLY,  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        err = fstat(fd_tty, &info);
+        if (0 == err) {
+            printf("mcu update[%s]: config_binary is present [%x, %d]\n", __func__, info.st_mode, (int)info.st_size);
+            is_there_conf_file = true;
+        } else {
+            printf("mcu update[%s]: invalid config_binary is present [%x, %d]\n", __func__, info.st_mode, (int)info.st_size);
+            info.st_size = 0;
+        }
+        close(fd_tty);
+        fd_tty = 0;
     }
 
     printf("mcu update[%s]: wait for mcu s-rec files %s\n", __func__, ctime(&start));
@@ -778,6 +802,78 @@ int main(int argc, char **argv)
             } else {
                 printf("mcu update[%s]: %s mcu doesn't support fpga rev cmd, SPI Flash won't updated %s\n", __func__, tty_n, strerror(errno));
             }
+            //waiting for the device to reset
+            sec_left_to_sleep = 10;
+            while(sec_left_to_sleep)
+            {
+                //making sure the device will wait regardless of signals or interrupts
+                sec_left_to_sleep = sleep(sec_left_to_sleep);
+            }
+        }
+        if (is_there_conf_file){
+            expect[0] = (char *)MCU_UPD_OK;
+            expect[1] = 0;
+            err = tx2mcu_cmd(fd_tty, (char *)MCU_CFG, rev, expect, strlen(MCU_CFG), 8, 3, MCU_UPD_RX_TO);
+            printf("after first ping pong\n");
+            if (0 == err) {
+                printf("\nflash memory[%s]: %s updating memory\n", __func__, tty_n);
+                fi = fopen(flash_conf_binary, "r+b");
+                if (fi) {
+                    rewind(fi);
+                    i = fread(flash_page, 1, MCU_UPD_SPI_FLASH_PAGE_L, fi); 
+                    if (i) {
+                        uint32_t crc;
+                        crc = crc_32(flash_page, i);
+                        flash_page[i]   = crc         & 0xFF;
+                        flash_page[i+1] = (crc >>  8) & 0xFF;
+                        flash_page[i+2] = (crc >> 16) & 0xFF;
+                        flash_page[i+3] = (crc >> 24) & 0xFF;
+
+                        printf("flash page crc %d i =%d\n",crc,i);
+
+                        start = time(&start);   
+                        printf("trying to send page length\n");
+                        err = tx2mcu(fd_tty, (uint8_t *)&i, 4);
+                        if (0 != err) {
+                            printf("\nflash memory[%s]: %s failure to tx flash page len %s\n", __func__, tty_n, strerror(errno));
+                            break;
+                        }
+                        printf("trying to send data\n");
+                        err = tx2mcu(fd_tty, flash_page, i+4);
+                        if (0 != err) {
+                            printf("\nflash memory[%s]: %s failure to tx flash page %s\n", __func__, tty_n, strerror(errno));
+                            break;
+                        }
+
+                        //start = time(&start);
+                        //redirect_stdio(TTYHSL0_UPD_LOG);
+                        //sync();
+                        usleep(1000*1000);
+                        if (0 == err) {
+                            printf("mcu update[%s]: signal about update done %s\n", __func__, ctime(&start));
+                            if (0 != tx2mcu(fd_tty, (uint8_t *)MCU_UPD_SFD, strlen(MCU_UPD_SFD))) {
+                                printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
+                            }
+                        } else {
+                            printf("mcu update[%s]: failure to tx page %d %s\n", __func__, flash_page, ctime(&start));
+                            //tx2mcu(fd_tty, (uint8_t *)MCU_UPD_RST, strlen(MCU_UPD_RST);
+                        } 
+                    fclose(fi);            
+                    }
+            } else {
+                printf("flash memory[%s]: %s doesn't exist %s\n", __func__, fpga_binary, strerror(errno));
+            }
+
+            } else {
+                printf("flash memory[%s]: %s recieved an error from the mcu %s\n", __func__, tty_n, strerror(errno));
+            }
+        }
+
+        sec_left_to_sleep = 10;
+        while(sec_left_to_sleep)
+        {
+            //making sure the device will wait regardless of signals or interrupts
+            sec_left_to_sleep = sleep(sec_left_to_sleep);
         }
 
         // check version
@@ -955,6 +1051,7 @@ int main(int argc, char **argv)
                 printf("mcu update[%s]: %s failure to transmit finish cmd %s\n", __func__, tty_n, strerror(errno));
             }
         }
+
     } while (0);
 
     close(fd_tty);
